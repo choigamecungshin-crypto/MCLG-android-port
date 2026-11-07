@@ -24,10 +24,38 @@ jobs:
           gradle-version: '8.9'
       - name: Install Android SDK components
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
-      - name: Build debug APK
-        run: gradle --no-daemon :app:assembleDebug
-      - uses: actions/upload-artifact@v4
+      - name: Generate first signing keystore
+        if: ${{ secrets.MCLG_KEYSTORE_BASE64 == '' }}
+        run: |
+          keytool -genkeypair -v -keystore mclg-release.jks -storepass mclg -keypass mclg -alias mclg -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=MCLG, OU=Android, O=MCLG, L=Unknown, ST=Unknown, C=VN"
+      - name: Upload signing keystore for one-time setup
+        if: ${{ secrets.MCLG_KEYSTORE_BASE64 == '' }}
+        uses: actions/upload-artifact@v4
         with:
-          name: MCLG-Android-arm64-debug
-          path: app/build/outputs/apk/debug/*.apk
+          name: MCLG-signing-keystore-SETUP-KEEP-SAFE
+          path: mclg-release.jks
+          retention-days: 30
+      - name: Restore signing keystore
+        if: ${{ secrets.MCLG_KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.MCLG_KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/mclg-release.jks"
+      - name: Build signed release APK
+        if: ${{ secrets.MCLG_KEYSTORE_BASE64 != '' }}
+        env:
+          MCLG_KEYSTORE_PATH: ${{ runner.temp }}/mclg-release.jks
+          MCLG_STORE_PASSWORD: ${{ secrets.MCLG_STORE_PASSWORD }}
+          MCLG_KEY_ALIAS: mclg
+          MCLG_KEY_PASSWORD: ${{ secrets.MCLG_KEY_PASSWORD }}
+        run: gradle --no-daemon :app:assembleRelease
+      - name: Build unsigned debug APK for pull requests
+        if: ${{ github.event_name == 'pull_request' }}
+        run: gradle --no-daemon :app:assembleDebug
+      - name: Upload signed APK
+        if: ${{ secrets.MCLG_KEYSTORE_BASE64 != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: MCLG-Android-arm64-signed
+          path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
