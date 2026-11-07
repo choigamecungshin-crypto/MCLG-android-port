@@ -1,14 +1,19 @@
 package dev.mc.legacy
 
 import android.app.Activity
+import android.app.AlertDialog
+import android.content.Intent
 import android.opengl.GLSurfaceView
 import android.os.Bundle
 import android.util.Log
 import android.view.WindowManager
+import android.widget.TextView
+import java.io.File
+import java.io.PrintWriter
+import java.io.StringWriter
 import javax.microedition.khronos.egl.EGL10
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.egl.EGLDisplay
-import javax.microedition.khronos.egl.EGLContext
 import javax.microedition.khronos.opengles.GL10
 
 class MainActivity : Activity(), GLSurfaceView.Renderer {
@@ -21,71 +26,116 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        installCrashRecorder()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         if (!nativeLibraryLoaded) {
             Log.e(TAG, "Native renderer is unavailable; showing a safe fallback surface")
         }
 
-        surface = GLSurfaceView(this).apply {
-            // Request GLES 3 and choose an ES3-capable config with fallbacks for
-            // drivers that do not expose an RGBA8888 + depth16 combination.
-            setEGLContextClientVersion(3)
-            setEGLConfigChooser(GLES3ConfigChooser())
-            preserveEGLContextOnPause = false
-            setRenderer(this@MainActivity)
-            renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
+        try {
+            surface = GLSurfaceView(this).apply {
+                setEGLContextClientVersion(3)
+                setEGLConfigChooser(GLES3ConfigChooser())
+                preserveEGLContextOnPause = false
+                setRenderer(this@MainActivity)
+                renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
+            }
+            setContentView(surface)
+            Log.i(TAG, "Activity created; requesting OpenGL ES 3.0")
+        } catch (error: Throwable) {
+            recordCrash("Activity/EGL setup", error)
+            showStartupError(error)
         }
-        setContentView(surface)
-        Log.i(TAG, "Activity created; requesting OpenGL ES 3.0")
+
+        showPreviousCrashIfPresent()
+    }
+
+    private fun installCrashRecorder() {
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            recordCrash("Uncaught exception on thread ${thread.name}", error)
+            previous?.uncaughtException(thread, error)
+        }
+    }
+
+    private fun recordCrash(stage: String, error: Throwable) {
+        try {
+            val writer = StringWriter()
+            error.printStackTrace(PrintWriter(writer))
+            File(filesDir, CRASH_FILE).writeText(
+                "Stage: $stage\nThread: ${Thread.currentThread().name}\n\n$writer"
+            )
+            Log.e(TAG, "Crash recorded at $stage", error)
+        } catch (writeError: Throwable) {
+            Log.e(TAG, "Could not save crash report", writeError)
+        }
+    }
+
+    private fun showStartupError(error: Throwable) {
+        val message = error.stackTraceToString()
+        setContentView(TextView(this).apply {
+            text = "Minecraft Legacy could not start.\n\n$message"
+            textSize = 12f
+            setPadding(24, 24, 24, 24)
+        })
+    }
+
+    private fun showPreviousCrashIfPresent() {
+        val report = File(filesDir, CRASH_FILE)
+        if (!report.exists()) return
+        val content = try { report.readText() } catch (_: Throwable) { return }
+        AlertDialog.Builder(this)
+            .setTitle("Previous startup crash")
+            .setMessage("A crash report was saved. Share it so the exact cause can be fixed.")
+            .setPositiveButton("Share report") { _, _ ->
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_SUBJECT, "Minecraft Legacy Android crash")
+                    putExtra(Intent.EXTRA_TEXT, content)
+                }
+                startActivity(Intent.createChooser(send, "Send crash report"))
+            }
+            .setNegativeButton("Close", null)
+            .show()
     }
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         nativeReady = false
         Log.i(TAG, "OpenGL renderer: ${gl?.glGetString(GL10.GL_RENDERER) ?: "unavailable"}")
         Log.i(TAG, "OpenGL version: ${gl?.glGetString(GL10.GL_VERSION) ?: "unavailable"}")
-
         if (!nativeLibraryLoaded) return
 
         nativeReady = try {
             nativeInit()
-        } catch (error: UnsatisfiedLinkError) {
-            Log.e(TAG, "JNI entry point is unavailable", error)
-            false
-        } catch (error: RuntimeException) {
-            Log.e(TAG, "Native renderer initialization failed", error)
+        } catch (error: Throwable) {
+            recordCrash("JNI nativeInit", error)
             false
         }
-
-        if (!nativeReady) {
-            Log.e(TAG, "Native GLES3 initialization did not complete")
-        }
+        if (!nativeReady) Log.e(TAG, "Native GLES3 initialization did not complete")
     }
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
         if (!nativeReady || width <= 0 || height <= 0) return
         try {
             nativeResize(width, height)
-        } catch (error: UnsatisfiedLinkError) {
+        } catch (error: Throwable) {
+            recordCrash("JNI nativeResize", error)
             nativeReady = false
-            Log.e(TAG, "nativeResize JNI call failed", error)
         }
     }
 
     override fun onDrawFrame(gl: GL10?) {
         if (!nativeReady) {
-            // Keep the UI thread and GLSurfaceView alive even if native setup
-            // could not initialize on this device.
             gl?.glClearColor(0.025f, 0.035f, 0.055f, 1.0f)
             gl?.glClear(GL10.GL_COLOR_BUFFER_BIT or GL10.GL_DEPTH_BUFFER_BIT)
             return
         }
-
         try {
             nativeRender()
-        } catch (error: UnsatisfiedLinkError) {
+        } catch (error: Throwable) {
+            recordCrash("JNI nativeRender", error)
             nativeReady = false
-            Log.e(TAG, "nativeRender JNI call failed", error)
         }
     }
 
@@ -101,30 +151,28 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
 
     companion object {
         private const val TAG = "MCLG-Android"
+        private const val CRASH_FILE = "mclg-crash.txt"
 
         private val nativeLibraryLoaded: Boolean = try {
             System.loadLibrary("mclg_android")
             Log.i(TAG, "Loaded libmclg_android.so")
             true
-        } catch (error: UnsatisfiedLinkError) {
+        } catch (error: Throwable) {
             Log.e(TAG, "Could not load libmclg_android.so", error)
             false
         }
     }
 }
 
-/**
- * Select only EGL configs that can create an OpenGL ES 3 context.
- * Some mobile drivers omit alpha or depth formats from their preferred
- * window configs, so retry progressively less restrictive pixel formats.
- */
 private class GLES3ConfigChooser : GLSurfaceView.EGLConfigChooser {
     override fun chooseConfig(egl: EGL10, display: EGLDisplay): EGLConfig {
         val candidates = arrayOf(
-            configSpec(8, 8, 8, 8, 16),
-            configSpec(8, 8, 8, 0, 16),
-            configSpec(5, 6, 5, 0, 16),
-            configSpec(5, 6, 5, 0, 0)
+            configSpec(8, 8, 8, 8, 16, EGL_OPENGL_ES3_BIT_KHR),
+            configSpec(8, 8, 8, 0, 16, EGL_OPENGL_ES3_BIT_KHR),
+            configSpec(5, 6, 5, 0, 16, EGL_OPENGL_ES3_BIT_KHR),
+            configSpec(5, 6, 5, 0, 0, EGL_OPENGL_ES3_BIT_KHR),
+            // Some EGL drivers advertise ES3 contexts on configs carrying the ES2 bit.
+            configSpec(8, 8, 8, 0, 16, EGL_OPENGL_ES2_BIT)
         )
 
         for ((index, spec) in candidates.withIndex()) {
@@ -132,29 +180,21 @@ private class GLES3ConfigChooser : GLSurfaceView.EGLConfigChooser {
             val count = IntArray(1)
             val found = egl.eglChooseConfig(display, spec, configs, 1, count)
             val config = configs.firstOrNull()
-
             if (found && count[0] > 0 && config != null) {
-                if (index > 0) {
-                    Log.w("MCLG-Android", "Using EGL fallback config #$index")
-                }
+                Log.i("MCLG-Android", "Selected EGL config candidate #$index")
                 return config
             }
+            Log.w("MCLG-Android", "EGL config candidate #$index unavailable; eglError=0x${egl.eglGetError().toString(16)}")
         }
 
-        throw IllegalArgumentException(
-            "This device has no EGL window config capable of OpenGL ES 3"
-        )
+        throw IllegalArgumentException("No compatible EGL window config found for GLES3")
     }
 
     private fun configSpec(
-        red: Int,
-        green: Int,
-        blue: Int,
-        alpha: Int,
-        depth: Int
+        red: Int, green: Int, blue: Int, alpha: Int, depth: Int, renderable: Int
     ): IntArray = intArrayOf(
         EGL10.EGL_SURFACE_TYPE, EGL10.EGL_WINDOW_BIT,
-        EGL10.EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT_KHR,
+        EGL10.EGL_RENDERABLE_TYPE, renderable,
         EGL10.EGL_RED_SIZE, red,
         EGL10.EGL_GREEN_SIZE, green,
         EGL10.EGL_BLUE_SIZE, blue,
@@ -165,7 +205,7 @@ private class GLES3ConfigChooser : GLSurfaceView.EGLConfigChooser {
     )
 
     companion object {
-        // EGL_OPENGL_ES3_BIT_KHR from EGL_KHR_create_context.
+        private const val EGL_OPENGL_ES2_BIT = 0x0004
         private const val EGL_OPENGL_ES3_BIT_KHR = 0x0040
     }
 }
