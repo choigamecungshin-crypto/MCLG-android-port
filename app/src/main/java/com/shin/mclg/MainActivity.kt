@@ -1,6 +1,9 @@
 package dev.mc.legacy
 
 import android.app.Activity
+import android.app.ActivityManager
+import android.app.ApplicationExitInfo
+import android.os.Build
 import android.app.AlertDialog
 import android.content.Intent
 import android.opengl.GLSurfaceView
@@ -27,6 +30,7 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         installCrashRecorder()
+        collectPreviousExitInfo()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         if (!nativeLibraryLoaded) {
@@ -49,6 +53,69 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
         }
 
         showPreviousCrashIfPresent()
+    }
+
+
+    // Native SIGSEGVs cannot be caught by a Java uncaught-exception handler.
+    // Android records the previous process exit; collect its tombstone/trace
+    // on the next launch so we can diagnose crashes that happen before UI.
+    private fun collectPreviousExitInfo() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+
+        try {
+            val manager = getSystemService(ACTIVITY_SERVICE) as ActivityManager
+            val prefs = getSharedPreferences("mclg-crash", MODE_PRIVATE)
+            val lastHandled = prefs.getLong("last_handled_exit_timestamp", 0L)
+
+            val exit = manager.getHistoricalProcessExitReasons(packageName, 0, 10)
+                .firstOrNull { info ->
+                    info.timestamp > lastHandled && (
+                        info.reason == ApplicationExitInfo.REASON_CRASH ||
+                        info.reason == ApplicationExitInfo.REASON_CRASH_NATIVE ||
+                        info.reason == ApplicationExitInfo.REASON_ANR ||
+                        info.reason == ApplicationExitInfo.REASON_INITIALIZATION_FAILURE
+                    )
+                } ?: return
+
+            val reason = when (exit.reason) {
+                ApplicationExitInfo.REASON_CRASH -> "JAVA_CRASH"
+                ApplicationExitInfo.REASON_CRASH_NATIVE -> "NATIVE_CRASH"
+                ApplicationExitInfo.REASON_ANR -> "ANR"
+                ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "INITIALIZATION_FAILURE"
+                else -> "UNKNOWN(${exit.reason})"
+            }
+
+            val trace = try {
+                exit.traceInputStream?.bufferedReader()?.use { it.readText() }
+                    ?: "(Android did not provide a trace)"
+            } catch (error: Throwable) {
+                "(Could not read Android trace: ${error.message})"
+            }
+
+            val report = buildString {
+                appendLine("Previous process exited abnormally")
+                appendLine("Package: $packageName")
+                appendLine("Reason: $reason")
+                appendLine("Timestamp: ${exit.timestamp}")
+                appendLine("Status: ${exit.status}")
+                appendLine("Importance: ${exit.importance}")
+                appendLine("Description: ${exit.description}")
+                appendLine()
+                appendLine("Android trace / tombstone:")
+                appendLine(trace)
+            }
+
+            val reportFile = File(filesDir, CRASH_FILE)
+            val oldReport = if (reportFile.exists()) {
+                try { reportFile.readText() } catch (_: Throwable) { "" }
+            } else ""
+            reportFile.writeText(if (oldReport.isBlank()) report else "$oldReport\n\n$report")
+
+            prefs.edit().putLong("last_handled_exit_timestamp", exit.timestamp).apply()
+            Log.e(TAG, "Recovered previous process exit: $reason; report saved to ${reportFile.absolutePath}")
+        } catch (error: Throwable) {
+            Log.w(TAG, "Could not inspect previous process exit information", error)
+        }
     }
 
     private fun installCrashRecorder() {
