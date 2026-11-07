@@ -31,6 +31,7 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
         super.onCreate(savedInstanceState)
         installCrashRecorder()
         collectPreviousExitInfo()
+        showPreviousCrashIfPresent()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         if (!nativeLibraryLoaded) {
@@ -52,7 +53,6 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
             showStartupError(error)
         }
 
-        showPreviousCrashIfPresent()
     }
 
 
