@@ -97,6 +97,7 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
+  # Keep the smoke-test script inline so clean checkouts never depend on an untracked helper path.
   emulator-smoke-test:
     name: Install and launch ARM64 APK in Android Emulator
     needs: build
