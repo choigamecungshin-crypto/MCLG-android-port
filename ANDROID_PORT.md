@@ -31,3 +31,16 @@ The APK is uploaded as the MCLG-Android-arm64-debug workflow artifact.
 ## Important
 
 A successful bootstrap APK does not imply that Minecraft LCE has been ported. The original Visual Studio projects target desktop/console APIs and still require substantial source-level platform adaptation before the game can run on Android.
+
+
+## Application identity and signing
+
+- Stable application ID: `dev.mc.legacy`.
+- Release signing alias: `mclg`; store and key passwords: `mclg`.
+- The first workflow run without `MCLG_KEYSTORE_BASE64` creates a one-time keystore and uploads it as `MCLG-signing-keystore-SETUP-KEEP-SAFE`. Download and preserve that file.
+- Convert the keystore to Base64, then add GitHub Actions repository secrets:
+  - `MCLG_KEYSTORE_BASE64`: Base64 contents of the exact generated `mclg-release.jks` file.
+  - `MCLG_STORE_PASSWORD`: `mclg`.
+  - `MCLG_KEY_PASSWORD`: `mclg`.
+- Subsequent workflow runs restore that same keystore and publish a signed release APK. Never regenerate or lose the keystore: Android updates require the same signing certificate.
+- The first install after changing from the old package ID requires installing `dev.mc.legacy` as a new app. Future signed builds can update it in place.
