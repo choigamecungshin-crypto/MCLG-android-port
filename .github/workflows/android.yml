@@ -32,15 +32,15 @@ jobs:
             echo "$KEYSTORE_BASE64" | base64 --decode > mclg-release.jks
             echo "KEY_WAS_CREATED=false" >> "$GITHUB_ENV"
           else
-            keytool -genkeypair -v -keystore mclg-release.jks -storepass mclg -keypass mclg -alias mclg -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=MCLG, OU=Android, O=MCLG, L=Unknown, ST=Unknown, C=VN"
+            keytool -genkeypair -v -keystore mclg-release.jks -storepass mclg123 -keypass mclg123 -alias mclg -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=MCLG, OU=Android, O=MCLG, L=Unknown, ST=Unknown, C=VN"
             echo "KEY_WAS_CREATED=true" >> "$GITHUB_ENV"
           fi
       - name: Build signed release APK
         env:
           MCLG_KEYSTORE_PATH: ${{ github.workspace }}/mclg-release.jks
-          MCLG_STORE_PASSWORD: ${{ secrets.MCLG_STORE_PASSWORD || 'mclg' }}
+          MCLG_STORE_PASSWORD: ${{ secrets.MCLG_STORE_PASSWORD || 'mclg123' }}
           MCLG_KEY_ALIAS: mclg
-          MCLG_KEY_PASSWORD: ${{ secrets.MCLG_KEY_PASSWORD || 'mclg' }}
+          MCLG_KEY_PASSWORD: ${{ secrets.MCLG_KEY_PASSWORD || 'mclg123' }}
         run: gradle --no-daemon :app:assembleRelease
       - name: Upload signed APK
         uses: actions/upload-artifact@v4
