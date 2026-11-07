@@ -29,7 +29,6 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        installCrashRecorder()
         collectPreviousExitInfo()
         showPreviousCrashIfPresent()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -115,14 +114,6 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
             Log.e(TAG, "Recovered previous process exit: $reason; report saved to ${reportFile.absolutePath}")
         } catch (error: Throwable) {
             Log.w(TAG, "Could not inspect previous process exit information", error)
-        }
-    }
-
-    private fun installCrashRecorder() {
-        val previous = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
-            recordCrash("Uncaught exception on thread ${thread.name}", error)
-            previous?.uncaughtException(thread, error)
         }
     }
 
