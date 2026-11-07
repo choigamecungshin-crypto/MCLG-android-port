@@ -56,9 +56,12 @@ message(STATUS "MCLG: compiling ${MCLG_ENGINE_SOURCE_COUNT} shared engine transl
 # The legacy code uses headers from many sibling directories. Export every
 # source directory as an include root; the platform compatibility layer is
 # added in the next Android porting layer.
+# Match directory paths only. A recursive "/*" glob also returns every
+# header/source file when LIST_DIRECTORIES is true, bloating AGP's CMake
+# model to tens of thousands of include entries and exhausting Gradle's heap.
 file(GLOB_RECURSE MCLG_INCLUDE_DIRS LIST_DIRECTORIES true
-    "${MCLG_WORLD_DIR}/*"
-    "${MCLG_CLIENT_DIR}/*"
+    "${MCLG_WORLD_DIR}/*/"
+    "${MCLG_CLIENT_DIR}/*/"
 )
 list(APPEND MCLG_INCLUDE_DIRS "${MCLG_WORLD_DIR}" "${MCLG_CLIENT_DIR}")
 list(REMOVE_DUPLICATES MCLG_INCLUDE_DIRS)
