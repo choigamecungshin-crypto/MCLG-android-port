@@ -8,8 +8,8 @@ android {
         applicationId = "dev.mc.legacy"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.3.0-dev"
+        versionCode = 4
+        versionName = "0.4.0-crashdiag"
         ndk { abiFilters += listOf("arm64-v8a") }
         externalNativeBuild {
             cmake { cppFlags += listOf("-std=c++17", "-Wall", "-Wextra") }
