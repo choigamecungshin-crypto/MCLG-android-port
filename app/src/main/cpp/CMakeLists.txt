@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(mclg_android LANGUAGES CXX)
+add_library(mclg_android SHARED native-lib.cpp)
+find_library(log-lib log)
+find_library(gles-lib GLESv3)
+target_compile_features(mclg_android PRIVATE cxx_std_17)
+target_compile_options(mclg_android PRIVATE -Wall -Wextra)
+target_link_libraries(mclg_android PRIVATE ${log-lib} ${gles-lib})
