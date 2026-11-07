@@ -131,7 +131,7 @@ jobs:
             set -eu
             mkdir -p test-results
             APK="$(find test-apk -type f -name '*.apk' -print -quit)"
-            if [[ -z "$APK" ]]; then
+            if [ -z "$APK" ]; then
               echo "FAIL: no APK was downloaded." | tee test-results/test-summary.txt
               exit 1
             fi
@@ -146,7 +146,7 @@ jobs:
             adb shell dumpsys activity exit-info dev.mc.legacy > test-results/exit-info.txt 2>&1 || true
             adb shell screencap -p /sdcard/mclg-startup.png >/dev/null 2>&1 || true
             adb pull /sdcard/mclg-startup.png test-results/startup.png >/dev/null 2>&1 || true
-            if [[ -z "$PID" ]]; then
+            if [ -z "$PID" ]; then
               echo "FAIL: app process exited within 15 seconds." | tee -a test-results/test-summary.txt
               grep -Ei 'FATAL EXCEPTION|Fatal signal|am_crash|dev\.mc\.legacy|AndroidRuntime|linker|UnsatisfiedLinkError' test-results/logcat.txt | tail -n 200 || true
               cat test-results/exit-info.txt || true
