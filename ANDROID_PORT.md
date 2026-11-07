@@ -36,7 +36,7 @@ A successful bootstrap APK does not imply that Minecraft LCE has been ported. Th
 ## Application identity and signing
 
 - Stable application ID: `dev.mc.legacy`.
-- Release signing alias: `mclg`; store and key passwords: `mclg`.
+- Release signing alias: `mclg`; store and key passwords: `mclg123` (Java `keytool` requires at least 6 characters).
 - The first workflow run without `MCLG_KEYSTORE_BASE64` creates a one-time keystore and uploads it as `MCLG-signing-keystore-SETUP-KEEP-SAFE`. Download and preserve that file.
 - Convert the keystore to Base64, then add GitHub Actions repository secrets:
   - `MCLG_KEYSTORE_BASE64`: Base64 contents of the exact generated `mclg-release.jks` file.
