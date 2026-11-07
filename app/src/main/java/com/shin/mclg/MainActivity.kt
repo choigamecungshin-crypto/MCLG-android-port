@@ -1,4 +1,4 @@
-package com.shin.mclg
+package dev.mc.legacy
 
 import android.app.Activity
 import android.opengl.GLSurfaceView
