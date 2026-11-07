@@ -127,41 +127,7 @@ jobs:
           profile: pixel_5
           emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
-          script: |
-            set -eu
-            mkdir -p test-results
-            APK="$(find test-apk -type f -name '*.apk' -print -quit)"
-            if [ -z "$APK" ]; then
-              echo "FAIL: no APK was downloaded." | tee test-results/test-summary.txt
-              exit 1
-            fi
-            echo "APK: $APK" | tee test-results/test-summary.txt
-            adb logcat -c
-            adb install -r "$APK" 2>&1 | tee test-results/install.txt
-            adb shell am force-stop dev.mc.legacy
-            adb shell am start -W -n dev.mc.legacy/.MainActivity 2>&1 | tee test-results/activity-start.txt
-            sleep 15
-            PID="$(adb shell pidof -s dev.mc.legacy 2>/dev/null | tr -d '\r' || true)"
-            adb logcat -d -v threadtime > test-results/logcat.txt
-            adb shell dumpsys activity exit-info dev.mc.legacy > test-results/exit-info.txt 2>&1 || true
-            adb shell screencap -p /sdcard/mclg-startup.png >/dev/null 2>&1 || true
-            adb pull /sdcard/mclg-startup.png test-results/startup.png >/dev/null 2>&1 || true
-            if [ -z "$PID" ]; then
-              echo "FAIL: app process exited within 15 seconds." | tee -a test-results/test-summary.txt
-              grep -Ei 'FATAL EXCEPTION|Fatal signal|am_crash|dev\.mc\.legacy|AndroidRuntime|linker|UnsatisfiedLinkError' test-results/logcat.txt | tail -n 200 || true
-              cat test-results/exit-info.txt || true
-              exit 1
-            fi
-            if grep -E 'FATAL EXCEPTION|Fatal signal [0-9]+|am_crash|Process: dev\.mc\.legacy' test-results/logcat.txt; then
-              echo "FAIL: crash markers found in logcat." | tee -a test-results/test-summary.txt
-              exit 1
-            fi
-            if ! grep -q 'Native GLES3 renderer initialized' test-results/logcat.txt; then
-              echo "FAIL: app alive but native GLES3 initialization was not confirmed." | tee -a test-results/test-summary.txt
-              grep -Ei 'MCLG-Android|EGL|OpenGL|linker|UnsatisfiedLinkError' test-results/logcat.txt | tail -n 200 || true
-              exit 1
-            fi
-            echo "PASS: Activity stayed alive and native GLES3 initialized. PID=$PID" | tee -a test-results/test-summary.txt
+          script: bash .github/scripts/emulator-smoke-test.sh
 
       - name: Upload emulator logs and screenshot
         if: always()
