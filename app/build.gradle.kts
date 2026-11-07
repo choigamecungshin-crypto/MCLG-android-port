@@ -28,9 +28,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlin {
-        jvmToolchain(17)
-    }
 
     signingConfigs {
         create("release") {
@@ -53,6 +50,9 @@ android {
     }
 }
 
+kotlin {
+    jvmToolchain(17)
+}
 
 // Reuse the original Minecraft Legacy artwork as the Android launcher icon.
 val copyMclgLauncherIcon by tasks.registering(Copy::class) {
