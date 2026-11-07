@@ -1,4 +1,7 @@
-plugins { id("com.android.application") }
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+}
 
 android {
     namespace = "dev.mc.legacy"
@@ -8,8 +11,8 @@ android {
         applicationId = "dev.mc.legacy"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.4.1-smoketest"
+        versionCode = 6
+        versionName = "0.4.2-kotlin-fix"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         externalNativeBuild {
             cmake { cppFlags += listOf("-std=c++17", "-Wall", "-Wextra") }
@@ -23,6 +26,10 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlin {
+        jvmToolchain(17)
     }
 
     signingConfigs {
