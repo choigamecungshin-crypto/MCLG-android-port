@@ -5,36 +5,75 @@ on:
   pull_request:
     branches: [android-port]
   workflow_dispatch:
+
 permissions:
   contents: read
+  actions: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+
       - name: Install Android SDK components
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
-      - name: Restore or create the permanent signing key
+
+      - name: Restore the permanent signing key
         env:
+          GH_TOKEN: ${{ github.token }}
           KEYSTORE_BASE64: ${{ secrets.MCLG_KEYSTORE_BASE64 }}
+          MCLG_STORE_PASSWORD: ${{ secrets.MCLG_STORE_PASSWORD || 'mclg123' }}
         run: |
+          set -euo pipefail
+
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 --decode > mclg-release.jks
-            echo "KEY_WAS_CREATED=false" >> "$GITHUB_ENV"
+            echo "Restored signing key from GitHub Actions secret."
           else
-            keytool -genkeypair -v -keystore mclg-release.jks -storepass mclg123 -keypass mclg123 -alias mclg -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=MCLG, OU=Android, O=MCLG, L=Unknown, ST=Unknown, C=VN"
-            echo "KEY_WAS_CREATED=true" >> "$GITHUB_ENV"
+            echo "Secret is not configured; restoring the latest saved signing-key artifact."
+            artifacts_json="$(curl --fail --silent --show-error \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100")"
+
+            artifact_id="$(echo "$artifacts_json" | jq -r '
+              [.artifacts[] |
+                select(.name == "MCLG-signing-keystore-SETUP-KEEP-SAFE" and .expired == false)
+              ] | sort_by(.created_at) | last | .id // empty
+            ')"
+
+            if [ -z "$artifact_id" ]; then
+              echo "::error::No saved signing key exists. Restore MCLG_KEYSTORE_BASE64 before building."
+              exit 1
+            fi
+
+            curl --fail --location --silent --show-error \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" \
+              -o signing-key.zip
+            unzip -p signing-key.zip mclg-release.jks > mclg-release.jks
           fi
+
+          test -s mclg-release.jks
+          keytool -list -keystore mclg-release.jks \
+            -storepass "$MCLG_STORE_PASSWORD" -alias mclg >/dev/null
+          echo "Permanent signing key verified."
+
       - name: Build signed release APK
         env:
           MCLG_KEYSTORE_PATH: ${{ github.workspace }}/mclg-release.jks
@@ -42,16 +81,18 @@ jobs:
           MCLG_KEY_ALIAS: mclg
           MCLG_KEY_PASSWORD: ${{ secrets.MCLG_KEY_PASSWORD || 'mclg123' }}
         run: gradle --no-daemon :app:assembleRelease
+
       - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
           name: MCLG-Android-arm64-signed
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
-      - name: Upload one-time signing keystore
-        if: env.KEY_WAS_CREATED == 'true'
+
+      - name: Refresh saved signing-key backup
         uses: actions/upload-artifact@v4
         with:
           name: MCLG-signing-keystore-SETUP-KEEP-SAFE
           path: mclg-release.jks
-          retention-days: 30
+          retention-days: 90
+          if-no-files-found: error
