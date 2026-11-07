@@ -45,3 +45,15 @@ android {
         }
     }
 }
+
+
+// Reuse the original Minecraft Legacy artwork as the Android launcher icon.
+val copyMclgLauncherIcon by tasks.registering(Copy::class) {
+    from(rootProject.file("Minecraft.Client/Common/Media/Graphics/MinecraftIcon.png"))
+    into(layout.projectDirectory.dir("src/main/res/drawable-nodpi"))
+    rename { "mclg_icon.png" }
+}
+
+tasks.named("preBuild").configure {
+    dependsOn(copyMclgLauncherIcon)
+}
