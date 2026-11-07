@@ -96,3 +96,84 @@ jobs:
           path: mclg-release.jks
           retention-days: 90
           if-no-files-found: error
+
+  emulator-smoke-test:
+    name: Install and launch ARM64 APK in Android Emulator
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the APK built by this workflow
+        uses: actions/download-artifact@v4
+        with:
+          name: MCLG-Android-arm64-signed
+          path: test-apk
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Boot Android 15 emulator and smoke-test the APK
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            mkdir -p test-results
+            APK="$(find test-apk -type f -name '*.apk' -print -quit)"
+            if [ -z "$APK" ]; then
+              echo "No APK was downloaded." | tee test-results/test-error.txt
+              exit 1
+            fi
+
+            echo "Testing APK: $APK" | tee test-results/test-summary.txt
+            adb shell getprop ro.build.version.release | tee -a test-results/test-summary.txt
+            adb shell getprop ro.build.version.sdk | tee -a test-results/test-summary.txt
+            adb shell getprop ro.product.cpu.abilist | tee -a test-results/test-summary.txt
+
+            adb logcat -c
+            adb install -r "$APK" 2>&1 | tee test-results/install.txt
+            adb shell am force-stop dev.mc.legacy
+            adb shell am start -W -n dev.mc.legacy/.MainActivity 2>&1 | tee test-results/activity-start.txt
+
+            # Allow EGL creation, JNI initialization, and several render frames.
+            sleep 12
+
+            PID="$(adb shell pidof -s dev.mc.legacy 2>/dev/null | tr -d '\r' || true)"
+            adb logcat -d -v threadtime > test-results/logcat.txt
+            adb shell dumpsys activity exit-info dev.mc.legacy > test-results/exit-info.txt 2>&1 || true
+            adb shell screencap -p /sdcard/mclg-startup.png >/dev/null 2>&1 || true
+            adb pull /sdcard/mclg-startup.png test-results/startup.png >/dev/null 2>&1 || true
+
+            if [ -z "$PID" ]; then
+              echo "FAIL: app process exited within 12 seconds." | tee -a test-results/test-summary.txt
+              grep -Ei 'FATAL EXCEPTION|Fatal signal|am_crash|dev\.mc\.legacy|MCLG-Android|AndroidRuntime' test-results/logcat.txt | tail -n 200 || true
+              exit 1
+            fi
+
+            if grep -E 'FATAL EXCEPTION|Fatal signal [0-9]+|am_crash|Process: dev\.mc\.legacy' test-results/logcat.txt; then
+              echo "FAIL: crash markers found in logcat." | tee -a test-results/test-summary.txt
+              exit 1
+            fi
+
+            if ! grep -q 'Native GLES3 renderer initialized' test-results/logcat.txt; then
+              echo "FAIL: app stayed alive but native GLES3 initialization was not confirmed." | tee -a test-results/test-summary.txt
+              grep -Ei 'MCLG-Android|EGL|OpenGL|linker|UnsatisfiedLinkError' test-results/logcat.txt | tail -n 200 || true
+              exit 1
+            fi
+
+            echo "PASS: Activity stayed alive and native GLES3 initialized. PID=$PID" | tee -a test-results/test-summary.txt
+
+      - name: Upload emulator logs and screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MCLG-emulator-smoke-test
+          path: test-results/
+          if-no-files-found: warn
