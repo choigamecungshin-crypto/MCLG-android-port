@@ -330,4 +330,78 @@ static inline BOOL TlsFree(DWORD index) {
     AndroidTlsValues().erase(index);
     return TRUE;
 }
+ 
+// POSIX-backed file/time compatibility used by the original optional save dump
+// paths. Game saves themselves are handled by Android_Storage.cpp.
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
+#ifndef S_OK
+#define S_OK ((HRESULT)0)
+#endif
+#ifndef GENERIC_WRITE
+#define GENERIC_WRITE 0x40000000u
+#endif
+#ifndef OPEN_ALWAYS
+#define OPEN_ALWAYS 4u
+#endif
+#ifndef FILE_FLAG_RANDOM_ACCESS
+#define FILE_FLAG_RANDOM_ACCESS 0x10000000u
+#endif
+#ifndef swscanf_s
+#define swscanf_s swscanf
+#endif
+
+static inline void GetSystemTime(SYSTEMTIME* output) {
+    if (!output) return;
+    const std::time_t now = std::time(nullptr);
+    std::tm utc{};
+    gmtime_r(&now, &utc);
+    output->wYear = static_cast<WORD>(utc.tm_year + 1900);
+    output->wMonth = static_cast<WORD>(utc.tm_mon + 1);
+    output->wDayOfWeek = static_cast<WORD>(utc.tm_wday);
+    output->wDay = static_cast<WORD>(utc.tm_mday);
+    output->wHour = static_cast<WORD>(utc.tm_hour);
+    output->wMinute = static_cast<WORD>(utc.tm_min);
+    output->wSecond = static_cast<WORD>(utc.tm_sec);
+    output->wMilliseconds = 0;
+}
+
+// Keep Win32 HANDLE opaque to engine code while mapping these debug-file
+// operations to normal Android app-private POSIX file descriptors.
+static inline HANDLE AndroidCreateFileCompat(LPCSTR path, DWORD, DWORD, LPVOID,
+                                              DWORD creation, DWORD, HANDLE) {
+    if (!path || !*path) return nullptr;
+    int flags = O_WRONLY | O_CREAT;
+    if (creation != OPEN_ALWAYS) flags |= O_TRUNC;
+    const int fd = ::open(path, flags, 0660);
+    if (fd < 0) return nullptr;
+    return reinterpret_cast<HANDLE>(static_cast<std::intptr_t>(fd) + 1);
+}
+static inline BOOL AndroidWriteFileCompat(HANDLE handle, LPCVOID buffer, DWORD bytes,
+                                           LPDWORD written, LPVOID) {
+    if (written) *written = 0;
+    if (!handle || (!buffer && bytes != 0)) return FALSE;
+    const int fd = static_cast<int>(reinterpret_cast<std::intptr_t>(handle) - 1);
+    const ssize_t result = ::write(fd, buffer, bytes);
+    if (result < 0) return FALSE;
+    if (written) *written = static_cast<DWORD>(result);
+    return static_cast<DWORD>(result) == bytes ? TRUE : FALSE;
+}
+static inline BOOL AndroidCloseHandleCompat(HANDLE handle) {
+    if (!handle) return FALSE;
+    const int fd = static_cast<int>(reinterpret_cast<std::intptr_t>(handle) - 1);
+    return ::close(fd) == 0 ? TRUE : FALSE;
+}
+#ifndef CreateFile
+#define CreateFile AndroidCreateFileCompat
+#endif
+#ifndef WriteFile
+#define WriteFile AndroidWriteFileCompat
+#endif
+#ifndef CloseHandle
+#define CloseHandle AndroidCloseHandleCompat
+#endif
+
 #endif
