@@ -108,6 +108,9 @@ void SelectWorldScreen::buttonClicked(Button *button)
     }
 	else if (button->id == BUTTON_CREATE_ID)
 	{
+#if defined(__ANDROID__)
+        minecraft->setScreen(new CreateWorldScreen(this));
+#else
         if (ProfileManager.IsFullVersion())
 		{
             minecraft->setScreen(new CreateWorldScreen(this));
@@ -125,6 +128,7 @@ void SelectWorldScreen::buttonClicked(Button *button)
             minecraft->setScreen(NULL);
 #endif
         }
+#endif
     }
 	else if (button->id == BUTTON_RENAME_ID)
 	{
