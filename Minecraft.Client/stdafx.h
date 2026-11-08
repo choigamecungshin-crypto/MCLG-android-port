@@ -222,7 +222,7 @@ typedef XUID GameSessionUID;
 #include "Common\UI\UIEnums.h"
 #include "Common\UI\UIStructs.h"
 // #ifdef _XBOX
-#include "Common\App_defines.h"
+#include "Common\App_Defines.h"
 #include "Common\App_enums.h"
 #include "Common\Tutorial\TutorialEnum.h"
 #include "Common\App_structs.h"
