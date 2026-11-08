@@ -9,6 +9,7 @@
 extern "C" void MclgAndroidRendererInitialize();
 extern "C" void MclgAndroidRendererResize(int width, int height);
 extern "C" void MclgAndroidRendererBeginFrame();
+extern "C" void MclgAndroidInputInitialize();
 extern "C" void MclgAndroidInputButton(unsigned int mask, int pressed);
 extern "C" void MclgAndroidInputMove(float x, float y);
 extern "C" void MclgAndroidInputLook(float dx, float dy);
@@ -45,6 +46,7 @@ Java_dev_mc_legacy_MainActivity_nativeInit(JNIEnv*, jobject) {
     }
 
     MclgAndroidRendererInitialize();
+    MclgAndroidInputInitialize();
 
     glDisable(GL_DITHER);
     glClearColor(0.025f, 0.035f, 0.055f, 1.0f);
