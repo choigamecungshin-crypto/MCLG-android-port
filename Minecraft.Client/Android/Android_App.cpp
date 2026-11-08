@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include "Minecraft.h"
 
 #include <android/log.h>
 
