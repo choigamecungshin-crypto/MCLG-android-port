@@ -17,6 +17,8 @@ extern "C" void MclgAndroidInputButton(unsigned int mask, int pressed);
 extern "C" void MclgAndroidInputMove(float x, float y);
 extern "C" void MclgAndroidInputLook(float dx, float dy);
 extern "C" void MclgAndroidInputTouch(float x, float y, int pressed);
+extern "C" void MclgAndroidInputMouse(float x, float y, int button, int pressed);
+extern "C" void MclgAndroidInputKey(int keyCode, int unicode, int pressed);
 extern "C" void MclgAndroidInputTrigger(int right, int value);
 extern "C" bool MclgAndroidGameInitialize();
 extern "C" void MclgAndroidGameFrame();
@@ -148,6 +150,20 @@ Java_dev_mc_legacy_MainActivity_nativeInputMove(JNIEnv*, jobject, jfloat x, jflo
 extern "C" JNIEXPORT void JNICALL
 Java_dev_mc_legacy_MainActivity_nativeInputLook(JNIEnv*, jobject, jfloat dx, jfloat dy) {
     MclgAndroidInputLook(dx, dy);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_dev_mc_legacy_MainActivity_nativeInputMouse(
+    JNIEnv*, jobject, jfloat x, jfloat y, jint button, jboolean pressed
+) {
+    MclgAndroidInputMouse(x, y, button, pressed == JNI_TRUE ? 1 : 0);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_dev_mc_legacy_MainActivity_nativeInputKey(
+    JNIEnv*, jobject, jint keyCode, jint unicode, jboolean pressed
+) {
+    MclgAndroidInputKey(keyCode, unicode, pressed == JNI_TRUE ? 1 : 0);
 }
 
 extern "C" JNIEXPORT void JNICALL
