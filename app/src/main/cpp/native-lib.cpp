@@ -3,6 +3,7 @@
 #include <android/log.h>
 #include <unistd.h>
 #include <cerrno>
+#include <string>
 
 #define LOG_TAG "MCLG-Android"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -38,14 +39,15 @@ Java_dev_mc_legacy_MainActivity_nativeInit(JNIEnv* env, jobject, jstring storage
         LOGE("Could not decode app-private storage path");
         return JNI_FALSE;
     }
-    const int directoryResult = chdir(path);
+    const std::string gamePath(path);
+    const int directoryResult = chdir(gamePath.c_str());
     const int directoryError = errno;
     env->ReleaseStringUTFChars(storagePath, path);
     if (directoryResult != 0) {
         LOGE("Could not set game working directory (errno=%d)", directoryError);
         return JNI_FALSE;
     }
-    LOGI("Game working directory: %s", path);
+    LOGI("Game working directory: %s", gamePath.c_str());
 
     // JNI methods must never issue GL commands before EGL has made a context
     // current on this thread (including after an EGL context recreation).
