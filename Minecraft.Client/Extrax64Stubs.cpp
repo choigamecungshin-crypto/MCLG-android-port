@@ -35,7 +35,7 @@
 #endif
 
 #if !defined(__PS3__) && !defined(__ORBIS__) && !defined(__PSVITA__)
-#ifdef _WINDOWS64
+#if defined(_WINDOWS64) || defined(__ANDROID__)
 //C4JStorage StorageManager;
 C_4JProfile ProfileManager;
 #endif
