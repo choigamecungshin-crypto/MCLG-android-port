@@ -4,6 +4,10 @@
 //
 #pragma once
 
+#if defined(__ANDROID__) && !defined(_WIN32)
+#include "AndroidCompat.h"
+#endif
+
 #ifdef __PS3__
 #else
 #define AUTO_VAR(_var, _val) auto _var = _val
