@@ -3,6 +3,14 @@
 #include "McRegionLevelStorageSource.h"
 #include "File.h"
 
+#if defined(__ANDROID__)
+#include <dirent.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <cerrno>
+#include <string>
+#endif
+
 #ifdef __PS3__
 #include <cell/cell_fs.h>
 #endif
@@ -10,7 +18,12 @@
 #include <fios2.h>
 #endif
 
-const wchar_t File::pathSeparator = L'\\';
+const wchar_t File::pathSeparator =
+#if defined(__ANDROID__)
+    L'/';
+#else
+    L'\\';
+#endif
 #ifdef _XBOX
 const wstring File::pathRoot = L"GAME:"; // Path root after pathSeparator has been removed
 #else
@@ -97,6 +110,11 @@ this->parent = NULL;
 //true if and only if the file or directory is successfully deleted; false otherwise
 bool File::_delete()
 {
+#if defined(__ANDROID__)
+    const std::string path = wstringtofilename(getPath());
+    return ::unlink(path.c_str()) == 0;
+#else
+    
 #ifdef _UNICODE
 	BOOL result = DeleteFile( getPath().c_str() );
 #else
@@ -112,6 +130,8 @@ bool File::_delete()
 	}
 	else
 		return true;
+
+#endif
 }
 
 //Creates the directory named by this abstract pathname.
@@ -119,11 +139,18 @@ bool File::_delete()
 //true if and only if the directory was created; false otherwise
 bool File::mkdir() const
 {
+#if defined(__ANDROID__)
+    const std::string path = wstringtofilename(getPath());
+    return ::mkdir(path.c_str(), 0775) == 0;
+#else
+    
 #ifdef _UNICODE
 	return CreateDirectory( getPath().c_str(),  NULL) != 0;
 
 #else
 	return CreateDirectory( wstringtofilename(getPath()),  NULL) != 0;
+#endif
+
 #endif
 }
 
@@ -149,6 +176,34 @@ bool File::mkdir() const
 //
 bool File::mkdirs() const
 {
+#if defined(__ANDROID__)
+    std::string path = wstringtofilename(getPath());
+    if (path.empty()) return false;
+    std::string current;
+    std::size_t index = 0;
+    if (path[0] == '/') {
+        current = "/";
+        index = 1;
+    }
+    while (index <= path.size()) {
+        const std::size_t next = path.find('/', index);
+        const std::string part = path.substr(index, next == std::string::npos ? std::string::npos : next - index);
+        if (!part.empty()) {
+            if (!current.empty() && current.back() != '/') current.push_back('/');
+            current += part;
+            struct stat info{};
+            if (::stat(current.c_str(), &info) != 0) {
+                if (::mkdir(current.c_str(), 0775) != 0 && errno != EEXIST) return false;
+                if (::stat(current.c_str(), &info) != 0) return false;
+            }
+            if (!S_ISDIR(info.st_mode)) return false;
+        }
+        if (next == std::string::npos) break;
+        index = next + 1;
+    }
+    return true;
+#else
+    
 	vector<wstring> path = stringSplit( m_abstractPathName, pathSeparator );
 
 	wstring pathToHere = L"";
@@ -192,6 +247,8 @@ bool File::mkdirs() const
 	assert( exists() );
 
 	return true;
+
+#endif
 }
 
 /*
@@ -206,12 +263,20 @@ return (File *) parent;
 //true if and only if the file or directory denoted by this abstract pathname exists; false otherwise
 bool File::exists() const
 {
+#if defined(__ANDROID__)
+    const std::string path = wstringtofilename(getPath());
+    struct stat info{};
+    return ::stat(path.c_str(), &info) == 0;
+#else
+    
 	// TODO 4J Stu - Possible we could get an error result from something other than the file not existing?
 #ifdef _UNICODE
 	return GetFileAttributes(  getPath().c_str() ) != -1;
 
 #else
 	return GetFileAttributes(  wstringtofilename(getPath()) ) != -1;
+#endif
+
 #endif
 }
 
@@ -234,6 +299,12 @@ bool File::isFile() const
 //true if and only if the renaming succeeded; false otherwise
 bool File::renameTo(File dest)
 {
+#if defined(__ANDROID__)
+    const std::string sourcePath = wstringtofilename(getPath());
+    const std::string destinationPath = wstringtofilename(dest.getPath());
+    return ::rename(sourcePath.c_str(), destinationPath.c_str()) == 0;
+#else
+    
 	// 4J Stu - The wstringtofilename function returns a pointer to the same location in memory every time it is
 	// called, therefore we were getting sourcePath and destPath having the same value. The solution here is to
 	// make a copy of the sourcePath by storing it in a std::string
@@ -256,6 +327,8 @@ bool File::renameTo(File dest)
 	}
 	else
 		return true;
+
+#endif
 }
 
 //Returns an array of abstract pathnames denoting the files in the directory denoted by this abstract pathname.
@@ -274,6 +347,20 @@ bool File::renameTo(File dest)
 //or if an I/O error occurs.
 vector<File *> *File::listFiles() const
 {
+#if defined(__ANDROID__)
+    vector<File *> *output = new vector<File *>();
+    const std::string path = wstringtofilename(getPath());
+    DIR *directory = ::opendir(path.c_str());
+    if (!directory) return output;
+    struct dirent *entry = nullptr;
+    while ((entry = ::readdir(directory)) != nullptr) {
+        if (std::strcmp(entry->d_name, ".") == 0 || std::strcmp(entry->d_name, "..") == 0) continue;
+        output->push_back(new File(*this, filenametowstring(entry->d_name)));
+    }
+    ::closedir(directory);
+    return output;
+#else
+    
 	vector<File *> *vOutput = new vector<File *>();
 
 	// TODO 4J Stu - Also need to check for I/O errors?
@@ -403,6 +490,8 @@ vector<File *> *File::listFiles() const
 #endif
 #endif
 	return vOutput;
+
+#endif
 }
 
 //Returns an array of abstract pathnames denoting the files and directories in the directory denoted by this abstract pathname that
@@ -417,6 +506,23 @@ vector<File *> *File::listFiles() const
 //The array will be empty if the directory is empty. Returns null if this abstract pathname does not denote a directory, or if an I/O error occurs.
 vector<File *> *File::listFiles(FileFilter *filter) const
 {
+#if defined(__ANDROID__)
+    if (!isDirectory()) return NULL;
+    vector<File *> *output = new vector<File *>();
+    const std::string path = wstringtofilename(getPath());
+    DIR *directory = ::opendir(path.c_str());
+    if (!directory) return output;
+    struct dirent *entry = nullptr;
+    while ((entry = ::readdir(directory)) != nullptr) {
+        if (std::strcmp(entry->d_name, ".") == 0 || std::strcmp(entry->d_name, "..") == 0) continue;
+        File *candidate = new File(*this, filenametowstring(entry->d_name));
+        if (filter == NULL || filter->accept(candidate)) output->push_back(candidate);
+        else delete candidate;
+    }
+    ::closedir(directory);
+    return output;
+#else
+    
 	// TODO 4J Stu - Also need to check for I/O errors?
 	if( !isDirectory() )
 		return NULL;
@@ -504,6 +610,8 @@ vector<File *> *File::listFiles(FileFilter *filter) const
 #endif
 #endif
 	return vOutput;
+
+#endif
 }
 
 //Tests whether the file denoted by this abstract pathname is a directory.
@@ -511,10 +619,18 @@ vector<File *> *File::listFiles(FileFilter *filter) const
 //true if and only if the file denoted by this abstract pathname exists and is a directory; false otherwise
 bool File::isDirectory() const
 {
+#if defined(__ANDROID__)
+    const std::string path = wstringtofilename(getPath());
+    struct stat info{};
+    return ::stat(path.c_str(), &info) == 0 && S_ISDIR(info.st_mode);
+#else
+    
 #ifdef _UNICODE
 	return exists() && ( GetFileAttributes( getPath().c_str() ) & FILE_ATTRIBUTE_DIRECTORY) == FILE_ATTRIBUTE_DIRECTORY;
 #else
 	return exists() && ( GetFileAttributes( wstringtofilename(getPath()) ) & FILE_ATTRIBUTE_DIRECTORY) == FILE_ATTRIBUTE_DIRECTORY;
+#endif
+
 #endif
 }
 
@@ -523,6 +639,13 @@ bool File::isDirectory() const
 //The length, in bytes, of the file denoted by this abstract pathname, or 0L if the file does not exist
 __int64 File::length()
 {
+#if defined(__ANDROID__)
+    const std::string path = wstringtofilename(getPath());
+    struct stat info{};
+    if (::stat(path.c_str(), &info) != 0 || !S_ISREG(info.st_mode)) return 0;
+    return static_cast<__int64>(info.st_size);
+#else
+    
 #ifdef __PS3__
 	//extern const char* getPS3HomePath();
 	CellFsErrno err=0;
@@ -618,6 +741,8 @@ __int64 File::length()
 		return 0l;
 	}
 #endif
+
+#endif
 }
 
 //Returns the time that the file denoted by this abstract pathname was last modified.
@@ -626,6 +751,17 @@ __int64 File::length()
 //or 0L if the file does not exist or if an I/O error occurs
 __int64 File::lastModified()
 {
+#if defined(__ANDROID__)
+    const std::string path = wstringtofilename(getPath());
+    struct stat info{};
+    if (::stat(path.c_str(), &info) != 0) return 0;
+#if defined(__ANDROID_API__) && __ANDROID_API__ >= 21
+    return static_cast<__int64>(info.st_mtim.tv_sec) * 1000LL + info.st_mtim.tv_nsec / 1000000LL;
+#else
+    return static_cast<__int64>(info.st_mtime) * 1000LL;
+#endif
+#else
+    
 	WIN32_FILE_ATTRIBUTE_DATA fileInfoBuffer;
 #ifdef _UNICODE
 	BOOL result = GetFileAttributesEx(
@@ -655,6 +791,8 @@ __int64 File::lastModified()
 		//Fail or a Directory
 		return 0l;
 	}
+
+#endif
 }
 
 const wstring File::getPath() const
