@@ -6,6 +6,10 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <fstream>
+#include <iterator>
+#include <new>
+#include <zlib.h>
 #include <unordered_map>
 #include <vector>
 
@@ -276,6 +280,108 @@ void drawImmediate(const DrawCall& call) {
     glDisableVertexAttribArray(2);
 }
 
+
+std::uint32_t pngU32(const std::uint8_t* p) {
+    return (std::uint32_t(p[0]) << 24) | (std::uint32_t(p[1]) << 16) |
+           (std::uint32_t(p[2]) << 8) | std::uint32_t(p[3]);
+}
+
+int pngPaeth(int a, int b, int c) {
+    const int p = a + b - c;
+    const int pa = std::abs(p - a), pb = std::abs(p - b), pc = std::abs(p - c);
+    return pa <= pb && pa <= pc ? a : (pb <= pc ? b : c);
+}
+
+bool decodeLegacyPng(const std::uint8_t* bytes, std::size_t size, int& width,
+                     int& height, std::vector<std::uint32_t>& pixels) {
+    static const std::uint8_t sig[8] = {137,80,78,71,13,10,26,10};
+    if (!bytes || size < 8 || std::memcmp(bytes, sig, 8) != 0) return false;
+    width = height = 0;
+    int depth = 0, type = -1, interlace = 0;
+    std::vector<std::uint8_t> compressed, palette, paletteAlpha;
+    std::size_t pos = 8;
+    while (pos + 12 <= size) {
+        const std::uint32_t length = pngU32(bytes + pos); pos += 4;
+        const std::uint8_t* tag = bytes + pos; pos += 4;
+        if (length > size - pos - 4) return false;
+        const std::uint8_t* data = bytes + pos;
+        if (std::memcmp(tag, "IHDR", 4) == 0) {
+            if (length != 13) return false;
+            width = static_cast<int>(pngU32(data));
+            height = static_cast<int>(pngU32(data + 4));
+            depth = data[8]; type = data[9]; interlace = data[12];
+        } else if (std::memcmp(tag, "PLTE", 4) == 0) {
+            palette.assign(data, data + length);
+        } else if (std::memcmp(tag, "tRNS", 4) == 0 && type == 3) {
+            paletteAlpha.assign(data, data + length);
+        } else if (std::memcmp(tag, "IDAT", 4) == 0) {
+            compressed.insert(compressed.end(), data, data + length);
+        }
+        pos += static_cast<std::size_t>(length) + 4;
+        if (std::memcmp(tag, "IEND", 4) == 0) break;
+    }
+    if (width <= 0 || height <= 0 || depth != 8 || interlace != 0 || compressed.empty()) return false;
+    int channels = type == 0 || type == 3 ? 1 : type == 2 ? 3 : type == 4 ? 2 : type == 6 ? 4 : 0;
+    if (!channels || (type == 3 && (palette.empty() || palette.size() % 3 != 0))) return false;
+    const std::size_t row = static_cast<std::size_t>(width) * channels;
+    const std::size_t decodedSize = (row + 1) * static_cast<std::size_t>(height);
+    std::vector<std::uint8_t> decoded(decodedSize);
+    uLongf actual = static_cast<uLongf>(decoded.size());
+    if (::uncompress(decoded.data(), &actual, compressed.data(),
+                     static_cast<uLong>(compressed.size())) != Z_OK || actual != decoded.size()) return false;
+
+    for (int y = 0; y < height; ++y) {
+        std::uint8_t* line = decoded.data() + static_cast<std::size_t>(y) * (row + 1);
+        const int filter = line[0];
+        std::uint8_t* dst = line + 1;
+        const std::uint8_t* prev = y ? decoded.data() + static_cast<std::size_t>(y - 1) * (row + 1) + 1 : nullptr;
+        if (filter < 0 || filter > 4) return false;
+        for (std::size_t x = 0; x < row; ++x) {
+            const int left = x >= static_cast<std::size_t>(channels) ? dst[x - channels] : 0;
+            const int up = prev ? prev[x] : 0;
+            const int upLeft = prev && x >= static_cast<std::size_t>(channels) ? prev[x - channels] : 0;
+            int add = 0;
+            if (filter == 1) add = left;
+            else if (filter == 2) add = up;
+            else if (filter == 3) add = (left + up) / 2;
+            else if (filter == 4) add = pngPaeth(left, up, upLeft);
+            dst[x] = static_cast<std::uint8_t>(dst[x] + add);
+        }
+    }
+
+    pixels.resize(static_cast<std::size_t>(width) * height);
+    for (int y = 0; y < height; ++y) {
+        const std::uint8_t* line = decoded.data() + static_cast<std::size_t>(y) * (row + 1) + 1;
+        for (int x = 0; x < width; ++x) {
+            const std::uint8_t* p = line + static_cast<std::size_t>(x) * channels;
+            std::uint8_t r = 0, g = 0, b = 0, a = 255;
+            if (type == 0) r = g = b = p[0];
+            else if (type == 2) { r = p[0]; g = p[1]; b = p[2]; }
+            else if (type == 3) {
+                const std::size_t n = p[0];
+                if (n * 3 + 2 >= palette.size()) return false;
+                r = palette[n * 3]; g = palette[n * 3 + 1]; b = palette[n * 3 + 2];
+                if (n < paletteAlpha.size()) a = paletteAlpha[n];
+            } else if (type == 4) { r = g = b = p[0]; a = p[1]; }
+            else { r = p[0]; g = p[1]; b = p[2]; a = p[3]; }
+            pixels[static_cast<std::size_t>(y) * width + x] =
+                (std::uint32_t(a) << 24) | (std::uint32_t(r) << 16) |
+                (std::uint32_t(g) << 8) | std::uint32_t(b);
+        }
+    }
+    return true;
+}
+
+bool loadLegacyPng(const char* path, int& width, int& height,
+                   std::vector<std::uint32_t>& pixels) {
+    if (!path) return false;
+    std::ifstream file(path, std::ios::binary);
+    if (!file) return false;
+    std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(file)),
+                                    std::istreambuf_iterator<char>());
+    return decodeLegacyPng(bytes.data(), bytes.size(), width, height, pixels);
+}
+
 void captureOrDraw(int primitive, int count, void* data, int vertexType, int pixelShader) {
     if (count <= 0 || data == nullptr) return;
 
@@ -486,15 +592,39 @@ void C4JRender::TextureSetParam(int param, int value) {
 }
 void C4JRender::TextureDynamicUpdateStart() {}
 void C4JRender::TextureDynamicUpdateEnd() {}
-HRESULT C4JRender::LoadTextureData(const char*, D3DXIMAGE_INFO* info, int** output) {
+HRESULT C4JRender::LoadTextureData(const char* path, D3DXIMAGE_INFO* info, int** output) {
     if (info) { info->Width = 0; info->Height = 0; }
     if (output) *output = nullptr;
-    return static_cast<HRESULT>(-1);
+    if (!info || !output) return static_cast<HRESULT>(-1);
+    std::vector<std::uint32_t> pixels;
+    int width = 0, height = 0;
+    if (!loadLegacyPng(path, width, height, pixels)) {
+        __android_log_print(ANDROID_LOG_ERROR, "MCLG-Android", "PNG decode failed: %s", path ? path : "(null)");
+        return static_cast<HRESULT>(-1);
+    }
+    int* image = new (std::nothrow) int[pixels.size()];
+    if (!image) return static_cast<HRESULT>(-1);
+    std::memcpy(image, pixels.data(), pixels.size() * sizeof(std::uint32_t));
+    info->Width = static_cast<UINT>(width);
+    info->Height = static_cast<UINT>(height);
+    *output = image;
+    return static_cast<HRESULT>(0);
 }
-HRESULT C4JRender::LoadTextureData(BYTE*, DWORD, D3DXIMAGE_INFO* info, int** output) {
+HRESULT C4JRender::LoadTextureData(BYTE* bytes, DWORD byteCount, D3DXIMAGE_INFO* info, int** output) {
     if (info) { info->Width = 0; info->Height = 0; }
     if (output) *output = nullptr;
-    return static_cast<HRESULT>(-1);
+    if (!bytes || !byteCount || !info || !output) return static_cast<HRESULT>(-1);
+    std::vector<std::uint32_t> pixels;
+    int width = 0, height = 0;
+    if (!decodeLegacyPng(bytes, static_cast<std::size_t>(byteCount), width, height, pixels))
+        return static_cast<HRESULT>(-1);
+    int* image = new (std::nothrow) int[pixels.size()];
+    if (!image) return static_cast<HRESULT>(-1);
+    std::memcpy(image, pixels.data(), pixels.size() * sizeof(std::uint32_t));
+    info->Width = static_cast<UINT>(width);
+    info->Height = static_cast<UINT>(height);
+    *output = image;
+    return static_cast<HRESULT>(0);
 }
 HRESULT C4JRender::SaveTextureData(const char*, D3DXIMAGE_INFO*, int*) { return static_cast<HRESULT>(-1); }
 HRESULT C4JRender::SaveTextureDataToMemory(void*, int, int* length, int, int, int*) {
