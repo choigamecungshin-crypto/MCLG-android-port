@@ -2,6 +2,30 @@
 
 
 #include "C4JThread.h"
+
+#if defined(__ANDROID__)
+#include <errno.h>
+#include <time.h>
+
+namespace {
+static int AndroidConditionWait(pthread_cond_t* condition, pthread_mutex_t* mutex, int timeoutMs)
+{
+	if (timeoutMs == static_cast<int>(INFINITE)) {
+		return pthread_cond_wait(condition, mutex);
+	}
+	struct timespec deadline;
+	clock_gettime(CLOCK_REALTIME, &deadline);
+	if (timeoutMs < 0) timeoutMs = 0;
+	deadline.tv_sec += timeoutMs / 1000;
+	deadline.tv_nsec += static_cast<long>(timeoutMs % 1000) * 1000000L;
+	if (deadline.tv_nsec >= 1000000000L) {
+		++deadline.tv_sec;
+		deadline.tv_nsec -= 1000000000L;
+	}
+	return pthread_cond_timedwait(condition, mutex, &deadline);
+}
+}
+#endif
 #ifdef __PSVITA__
 #include "..\Minecraft.Client\PSVita\PSVitaExtras\ShutdownManager.h"
 #include "..\Minecraft.Client\PSVita\PSVitaExtras\PSVitaTLSStorage.h"
@@ -546,6 +570,10 @@ C4JThread::Event::Event(EMode mode/* = e_modeAutoClear*/)
 #elif defined __PSVITA__
 	char name[1] = {0};
 	m_event = sceKernelCreateEventFlag( name, SCE_KERNEL_EVF_ATTR_TH_FIFO | SCE_KERNEL_EVF_ATTR_MULTI, 0, NULL);
+#elif defined(__ANDROID__)
+	pthread_mutex_init(&m_mutex, NULL);
+	pthread_cond_init(&m_condition, NULL);
+	m_signaled = false;
 #else
 	m_event = CreateEvent( NULL, (m_mode == e_modeManualClear), FALSE, NULL );
 #endif //__PS3__
@@ -560,6 +588,9 @@ C4JThread::Event::~Event()
 	sceKernelDeleteEventFlag(m_event);
 #elif defined __PSVITA__
 	sceKernelDeleteEventFlag(m_event);
+#elif defined(__ANDROID__)
+	pthread_cond_destroy(&m_condition);
+	pthread_mutex_destroy(&m_mutex);
 #else
 	CloseHandle( m_event );
 #endif // __PS3__
@@ -574,6 +605,12 @@ void C4JThread::Event::Set()
 	sceKernelSetEventFlag(m_event, 1);
 #elif defined __PSVITA__
 	sceKernelSetEventFlag(m_event, 1);
+#elif defined(__ANDROID__)
+	pthread_mutex_lock(&m_mutex);
+	m_signaled = true;
+	if (m_mode == e_modeManualClear) pthread_cond_broadcast(&m_condition);
+	else pthread_cond_signal(&m_condition);
+	pthread_mutex_unlock(&m_mutex);
 #else
 	SetEvent(m_event);
 #endif //__PS3__
@@ -587,6 +624,10 @@ void C4JThread::Event::Clear()
 	sceKernelClearEventFlag(m_event, ~(1));
 #elif defined __PSVITA__
 	sceKernelClearEventFlag(m_event, ~1);
+#elif defined(__ANDROID__)
+	pthread_mutex_lock(&m_mutex);
+	m_signaled = false;
+	pthread_mutex_unlock(&m_mutex);
 #else
 	ResetEvent(m_event);
 #endif //__PS3__
@@ -661,6 +702,22 @@ DWORD C4JThread::Event::WaitForSignal( int timeoutMs )
 		case SCE_KERNEL_ERROR_WAIT_CANCEL: return WAIT_ABANDONED;
 		default: return WAIT_FAILED;
 	}
+#elif defined(__ANDROID__)
+	pthread_mutex_lock(&m_mutex);
+	while (!m_signaled) {
+		const int result = AndroidConditionWait(&m_condition, &m_mutex, timeoutMs);
+		if (result == ETIMEDOUT) {
+			pthread_mutex_unlock(&m_mutex);
+			return WAIT_TIMEOUT;
+		}
+		if (result != 0) {
+			pthread_mutex_unlock(&m_mutex);
+			return WAIT_FAILED;
+		}
+	}
+	if (m_mode == e_modeAutoClear) m_signaled = false;
+	pthread_mutex_unlock(&m_mutex);
+	return WAIT_OBJECT_0;
 #else
 	return WaitForSingleObject(m_event, timeoutMs);
 #endif // __PS3__
