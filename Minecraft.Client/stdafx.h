@@ -5,6 +5,10 @@
 
 #pragma once
 
+#if defined(__ANDROID__) && !defined(_WIN32)
+#include "..\\Minecraft.World\\AndroidCompat.h"
+#endif
+
 //#include <xtl.h>
 //#include <xboxmath.h>
 
