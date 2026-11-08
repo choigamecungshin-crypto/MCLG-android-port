@@ -80,6 +80,10 @@ public:
 		SceKernelEventFlag m_event;
 	#elif defined __PSVITA__
 		SceUID m_event;
+	#elif defined(__ANDROID__)
+		pthread_mutex_t m_mutex;
+		pthread_cond_t m_condition;
+		bool m_signaled;
 	#else
 		HANDLE m_event;
 	#endif // __PS3__
@@ -95,6 +99,7 @@ public:
 		};
 
 		EventArray(int size, EMode mode = e_modeAutoClear);
+		~EventArray();
 
 		void Set(int index);
 		void Clear(int index);
@@ -116,6 +121,10 @@ public:
 		SceKernelEventFlag	m_events;
 #elif defined __PSVITA__
 		SceUID m_events;
+#elif defined(__ANDROID__)
+		pthread_mutex_t m_mutex;
+		pthread_cond_t m_condition;
+		unsigned int m_signalMask;
 #else
 		HANDLE*				m_events;
 #endif // __PS3__
