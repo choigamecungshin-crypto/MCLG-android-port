@@ -21,6 +21,7 @@ namespace {
 bool g_androidGameStarted = false;
 bool g_androidNetworkStarted = false;
 bool g_androidWorldStarting = false;
+__int64 g_androidWorldStartTime = 0;
 
 enum AndroidInputEventType { ANDROID_INPUT_TOUCH, ANDROID_INPUT_MOUSE, ANDROID_INPUT_KEY };
 struct AndroidInputEvent {
@@ -175,6 +176,9 @@ extern "C" void MclgAndroidGameFrame()
 
     if (g_androidWorldStarting && game->level != NULL)
         g_androidWorldStarting = false;
+    else if (g_androidWorldStarting && !g_NetworkManager.IsNetworkThreadRunning() &&
+             System::currentTimeMillis() - g_androidWorldStartTime > 10000)
+        g_androidWorldStarting = false;
 
     game->run_middle();
 }
@@ -237,34 +241,8 @@ void CConsoleMinecraftApp::TemporaryCreateGameStart()
     app.SetTutorialMode(false);
 }
 
-extern "C" bool MclgAndroidStartWorld(const wchar_t* worldName, __int64 seed)
+static void configureAndroidLocalGame()
 {
-    if (!g_androidGameStarted || g_androidWorldStarting)
-        return false;
-
-    Minecraft* game = Minecraft::GetInstance();
-    if (game == NULL || game->user == NULL)
-        return false;
-
-    g_androidWorldStarting = true;
-    app.setLevelGenerationOptions(NULL);
-    app.ReleaseSaveThumbnail();
-    ProfileManager.SetLockedProfile(0);
-    game->user->name = L"Player";
-    app.ApplyGameSettingsChanged(0);
-
-    MinecraftServer::resetFlags();
-    app.SetTutorialMode(false);
-    app.SetCorruptSaveDeleted(false);
-    app.ClearTerrainFeaturePosition();
-
-    const wchar_t* safeName = (worldName != NULL && worldName[0] != 0) ? worldName : L"World";
-    StorageManager.ResetSaveData();
-    StorageManager.SetSaveTitle(safeName);
-
-    NetworkGameInitData* params = new NetworkGameInitData();
-    params->seed = seed;
-
     app.SetGameHostOption(eGameHostOption_Difficulty, 1);
     app.SetGameHostOption(eGameHostOption_FriendsOfFriends, 0);
     app.SetGameHostOption(eGameHostOption_Gamertags, 1);
@@ -280,9 +258,33 @@ extern "C" bool MclgAndroidStartWorld(const wchar_t* worldName, __int64 seed)
     app.SetGameHostOption(eGameHostOption_HostCanFly, 0);
     app.SetGameHostOption(eGameHostOption_HostCanChangeHunger, 1);
     app.SetGameHostOption(eGameHostOption_HostCanBeInvisible, 0);
+}
+
+static bool launchAndroidLocalWorld(NetworkGameInitData* params, const wchar_t* worldName)
+{
+    if (!g_androidGameStarted || g_androidWorldStarting || params == NULL)
+        return false;
+    Minecraft* game = Minecraft::GetInstance();
+    if (game == NULL || game->user == NULL)
+        return false;
+
+    g_androidWorldStarting = true;
+    g_androidWorldStartTime = System::currentTimeMillis();
+    app.setLevelGenerationOptions(NULL);
+    app.ReleaseSaveThumbnail();
+    ProfileManager.SetLockedProfile(0);
+    ProfileManager.SetPrimaryPad(0);
+    game->user->name = L"Player";
+    app.ApplyGameSettingsChanged(0);
+    MinecraftServer::resetFlags();
+    app.SetTutorialMode(false);
+    app.SetCorruptSaveDeleted(false);
+    app.ClearTerrainFeaturePosition();
+
+    configureAndroidLocalGame();
     params->settings = app.GetGameHostOption(eGameHostOption_All);
 
-    // The local QNet adapter is offline, single-player, and reports one host.
+    // Run the original Legacy integrated server through the offline network adapter.
     g_NetworkManager.HostGame(1, false, false);
     g_NetworkManager.FakeLocalPlayerJoined();
 
@@ -293,8 +295,87 @@ extern "C" bool MclgAndroidStartWorld(const wchar_t* worldName, __int64 seed)
         512 * 1024
     );
     gameThread->Run();
-    __android_log_print(ANDROID_LOG_INFO, "MCLG-Android", "Started Legacy world thread: %ls", safeName);
+    __android_log_print(ANDROID_LOG_INFO, "MCLG-Android",
+                        "Started Legacy world thread: %ls", worldName ? worldName : L"World");
     return true;
+}
+
+extern "C" bool MclgAndroidStartWorld(const wchar_t* worldName, __int64 seed)
+{
+    if (!g_androidGameStarted || g_androidWorldStarting)
+        return false;
+
+    const wchar_t* safeName = (worldName != NULL && worldName[0] != 0) ? worldName : L"World";
+    StorageManager.ResetSaveData();
+    StorageManager.SetSaveTitle(safeName);
+
+    NetworkGameInitData* params = new NetworkGameInitData();
+    params->seed = seed;
+    params->saveData = NULL;
+    return launchAndroidLocalWorld(params, safeName);
+}
+
+struct AndroidWorldLoadCallback
+{
+    bool called;
+    bool success;
+};
+
+static int androidWorldLoadComplete(LPVOID parameter, const bool success, const bool)
+{
+    AndroidWorldLoadCallback* result = static_cast<AndroidWorldLoadCallback*>(parameter);
+    if (result != NULL) {
+        result->called = true;
+        result->success = success;
+    }
+    return 0;
+}
+
+extern "C" bool MclgAndroidLoadWorld(const wchar_t* worldName)
+{
+    if (!g_androidGameStarted || g_androidWorldStarting || worldName == NULL || worldName[0] == 0)
+        return false;
+
+    SAVE_DETAILS* details = StorageManager.ReturnSavesInfo();
+    if (details == NULL || details->SaveInfoA == NULL)
+        return false;
+
+    SAVE_INFO* selected = NULL;
+    for (int i = 0; i < details->iSaveC; ++i) {
+        wstring candidate;
+        for (const char* p = details->SaveInfoA[i].UTF8SaveFilename; *p; ++p)
+            candidate.push_back(static_cast<unsigned char>(*p));
+        if (candidate == worldName) {
+            selected = &details->SaveInfoA[i];
+            break;
+        }
+    }
+    if (selected == NULL)
+        return false;
+
+    AndroidWorldLoadCallback callback = {false, false};
+    StorageManager.LoadSaveData(selected, androidWorldLoadComplete, &callback);
+    if (!callback.called || !callback.success)
+        return false;
+
+    DWORD bytes = StorageManager.GetSaveSize();
+    if (bytes == 0)
+        return false;
+
+    BYTE* saveBuffer = new (std::nothrow) BYTE[bytes];
+    if (saveBuffer == NULL)
+        return false;
+    DWORD copied = bytes;
+    StorageManager.GetSaveData(saveBuffer, &copied);
+    if (copied == 0) {
+        delete[] saveBuffer;
+        return false;
+    }
+
+    NetworkGameInitData* params = new NetworkGameInitData();
+    params->seed = 0;
+    params->saveData = new LoadSaveDataThreadParam(saveBuffer, copied, wstring(worldName));
+    return launchAndroidLocalWorld(params, worldName);
 }
 
 extern "C" void MclgAndroidInputTouch(float x, float y, int pressed)
