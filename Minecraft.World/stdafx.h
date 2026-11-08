@@ -86,6 +86,10 @@ typedef XUID GameSessionUID;
 #include "OrbisTypes.h"
 #include "OrbisStubs.h"
 #include "OrbisMaths.h"
+#elif defined(__ANDROID__)
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 #elif defined __PSVITA__
 #include <unordered_map>
 #include <unordered_set>
