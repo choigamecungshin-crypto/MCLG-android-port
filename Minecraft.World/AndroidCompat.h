@@ -139,6 +139,24 @@ enum {
 #ifndef MAX_PATH
 #define MAX_PATH 260
 #endif
+#ifndef INFINITE
+#define INFINITE 0xFFFFFFFFu
+#endif
+#ifndef STILL_ACTIVE
+#define STILL_ACTIVE 259u
+#endif
+#ifndef WAIT_OBJECT_0
+#define WAIT_OBJECT_0 0u
+#endif
+#ifndef WAIT_TIMEOUT
+#define WAIT_TIMEOUT 258u
+#endif
+#ifndef WAIT_ABANDONED
+#define WAIT_ABANDONED 0x80u
+#endif
+#ifndef WAIT_FAILED
+#define WAIT_FAILED 0xFFFFFFFFu
+#endif
 
 struct FILETIME { DWORD dwLowDateTime; DWORD dwHighDateTime; };
 struct SYSTEMTIME {
