@@ -38,10 +38,7 @@ void SoundEngine::tick(shared_ptr<Mob> *players, float a)
 {
 }
 void SoundEngine::destroy() {}
-void SoundEngine::play(int iSound, float x, float y, float z, float volume, float pitch)
-{
-	app.DebugPrintf("PlaySound - %d\n",iSound);
-}
+void SoundEngine::play(int, float, float, float, float, float) {}
 void SoundEngine::playStreaming(const wstring& name, float x, float y , float z, float volume, float pitch, bool bMusicDelay) {}
 void SoundEngine::playUI(int iSound, float volume, float pitch) {}
 
