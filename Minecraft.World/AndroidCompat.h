@@ -15,6 +15,9 @@
 #include <atomic>
 #include <unordered_map>
 #include <pthread.h>
+#include <cerrno>
+#include <sys/mman.h>
+#include <unistd.h>
 
 #ifndef TRUE
 #define TRUE 1
@@ -69,11 +72,110 @@ using HANDLE = void*;
 using PBYTE = BYTE*;
 using LPBYTE = BYTE*;
 using PDWORD = DWORD*;
+using LPDWORD = DWORD*;
+using PLONG = LONG*;
 using HRESULT = std::int32_t;
 using WPARAM = std::uintptr_t;
 using LPARAM = std::intptr_t;
 using LRESULT = std::intptr_t;
 struct LARGE_INTEGER { LONGLONG QuadPart; };
+
+using PULONG_PTR = ULONG_PTR*;
+static constexpr ULONG_PTR MAXULONG_PTR = static_cast<ULONG_PTR>(~static_cast<ULONG_PTR>(0));
+
+#ifndef PAGE_READWRITE
+#define PAGE_READWRITE 0x04
+#endif
+#ifndef MEM_COMMIT
+#define MEM_COMMIT 0x1000
+#endif
+#ifndef MEM_RESERVE
+#define MEM_RESERVE 0x2000
+#endif
+#ifndef MEM_DECOMMIT
+#define MEM_DECOMMIT 0x4000
+#endif
+#ifndef MEM_RELEASE
+#define MEM_RELEASE 0x8000
+#endif
+#ifndef FILE_BEGIN
+#define FILE_BEGIN 0
+#endif
+#ifndef FILE_CURRENT
+#define FILE_CURRENT 1
+#endif
+#ifndef FILE_END
+#define FILE_END 2
+#endif
+
+struct MEMORYSTATUS {
+    DWORD dwLength;
+    DWORD dwMemoryLoad;
+    SIZE_T dwTotalPhys;
+    SIZE_T dwAvailPhys;
+    SIZE_T dwTotalPageFile;
+    SIZE_T dwAvailPageFile;
+    SIZE_T dwTotalVirtual;
+    SIZE_T dwAvailVirtual;
+    SIZE_T dwAvailExtendedVirtual;
+};
+
+static inline DWORD GetLastError() {
+    return static_cast<DWORD>(errno);
+}
+
+static inline void GlobalMemoryStatus(MEMORYSTATUS* status) {
+    if (!status) return;
+    const long pageSize = sysconf(_SC_PAGESIZE);
+    const long totalPages = sysconf(_SC_PHYS_PAGES);
+    const long availablePages = sysconf(_SC_AVPHYS_PAGES);
+    const SIZE_T total = pageSize > 0 && totalPages > 0
+        ? static_cast<SIZE_T>(pageSize) * static_cast<SIZE_T>(totalPages) : 0;
+    const SIZE_T available = pageSize > 0 && availablePages > 0
+        ? static_cast<SIZE_T>(pageSize) * static_cast<SIZE_T>(availablePages) : 0;
+    status->dwLength = sizeof(MEMORYSTATUS);
+    status->dwMemoryLoad = total ? static_cast<DWORD>(((total - available) * 100) / total) : 0;
+    status->dwTotalPhys = total;
+    status->dwAvailPhys = available;
+    status->dwTotalPageFile = total;
+    status->dwAvailPageFile = available;
+    status->dwTotalVirtual = static_cast<SIZE_T>(-1);
+    status->dwAvailVirtual = static_cast<SIZE_T>(-1);
+    status->dwAvailExtendedVirtual = 0;
+}
+
+// Implement the reserve/commit/decommit subset used by the Legacy save
+// container. Reserved ranges are real Android virtual mappings; commits
+// change page protection rather than allocating a second backing buffer.
+static inline LPVOID VirtualAlloc(LPVOID address, SIZE_T size, DWORD type, DWORD) {
+    if (size == 0) { errno = EINVAL; return nullptr; }
+    if ((type & MEM_RESERVE) != 0) {
+        if (address != nullptr) { errno = EINVAL; return nullptr; }
+        void* result = mmap(nullptr, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        return result == MAP_FAILED ? nullptr : result;
+    }
+    if ((type & MEM_COMMIT) != 0) {
+        if (address == nullptr || mprotect(address, size, PROT_READ | PROT_WRITE) != 0)
+            return nullptr;
+        return address;
+    }
+    errno = EINVAL;
+    return nullptr;
+}
+
+static inline BOOL VirtualFree(LPVOID address, SIZE_T size, DWORD type) {
+    if (address == nullptr) { errno = EINVAL; return FALSE; }
+    if ((type & MEM_DECOMMIT) != 0) {
+        if (size == 0 || mprotect(address, size, PROT_NONE) != 0) return FALSE;
+        (void)madvise(address, size, MADV_DONTNEED);
+        return TRUE;
+    }
+    if ((type & MEM_RELEASE) != 0) {
+        return munmap(address, size) == 0 ? TRUE : FALSE;
+    }
+    errno = EINVAL;
+    return FALSE;
+}
 
 #ifndef ZeroMemory
 #define ZeroMemory(destination, length) std::memset((destination), 0, (length))
