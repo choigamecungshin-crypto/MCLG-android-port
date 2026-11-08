@@ -76,6 +76,14 @@ void Screen::mouseReleased(int x, int y, int buttonNum)
     }
 }
 
+void Screen::handleAndroidTouch(int x, int y, bool pressed)
+{
+    if (pressed)
+        mouseClicked(x, y, 0);
+    else
+        mouseReleased(x, y, 0);
+}
+
 void Screen::buttonClicked(Button *button)
 {
 }
