@@ -34,9 +34,29 @@ wstring McRegionLevelStorageSource::getName()
 
 vector<LevelSummary *> *McRegionLevelStorageSource::getLevelList()
 {
-	// 4J Stu - We don't need to do directory lookups with the xbox save files
 	vector<LevelSummary *> *levels = new vector<LevelSummary *>;
-#if 0
+#if defined(__ANDROID__)
+	SAVE_DETAILS *details = StorageManager.ReturnSavesInfo();
+	if (details != NULL && details->SaveInfoA != NULL)
+	{
+		for (int i = 0; i < details->iSaveC; ++i)
+		{
+			const SAVE_INFO& info = details->SaveInfoA[i];
+			wstring id;
+			wstring name;
+			for (const char *p = info.UTF8SaveFilename; *p; ++p)
+				id.push_back(static_cast<unsigned char>(*p));
+			for (const char *p = info.UTF8SaveTitle; *p; ++p)
+				name.push_back(static_cast<unsigned char>(*p));
+			if (name.empty()) name = id;
+			levels->push_back(new LevelSummary(
+				id, name,
+				static_cast<__int64>(info.metaData.modifiedTime) * 1000,
+				static_cast<__int64>(info.metaData.dataSize),
+				NULL, false, false, false));
+		}
+	}
+#elif 0
 	vector<File *> *subFolders = baseDir.listFiles();
 	File *file;
 	AUTO_VAR(itEnd, subFolders->end());
