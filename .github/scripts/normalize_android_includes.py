@@ -1,18 +1,47 @@
 #!/usr/bin/env python3
-"""Normalize Windows-style quoted #include paths for Android/Clang builds.
+"""Normalize Windows-style include separators for Android/Clang builds.
 
-The shared Legacy Edition sources were authored primarily for Windows and use
-backslashes in relative include operands. Clang on Linux treats those as
-literal filename characters, so those includes fail on GitHub's Android
-runners. This script rewrites only include operands in the CI checkout; it
-does not change string literals or other source text.
+The Legacy Edition shared sources use Windows backslashes in many relative
+#include operands. Clang on Linux treats those as literal filename characters.
+This script rewrites only include operands in the CI checkout; source strings,
+comments, and non-include lines are left untouched.
 """
 from pathlib import Path
-import re
 
 ROOTS = (Path("Minecraft.World"), Path("Minecraft.Client"))
 SOURCE_SUFFIXES = {".h", ".hh", ".hpp", ".hxx", ".c", ".cc", ".cpp", ".cxx", ".inc"}
-INCLUDE = re.compile(rb'^(\\s*#\\s*include\\s*)(["<])([^">\\r\\n]*\\\\[^">\\r\\n]*)([">])', re.MULTILINE)
+BACKSLASH = bytes([92])
+
+def normalize_line(line: bytes) -> tuple[bytes, bool]:
+    hash_pos = line.find(b"#")
+    if hash_pos < 0 or line[:hash_pos].strip():
+        return line, False
+
+    directive = line[hash_pos + 1:].lstrip()
+    if not directive.startswith(b"include"):
+        return line, False
+
+    quote_pos = line.find(b'"', hash_pos + 1)
+    angle_pos = line.find(b"<", hash_pos + 1)
+    candidates = [p for p in (quote_pos, angle_pos) if p >= 0]
+    if not candidates:
+        return line, False
+
+    open_pos = min(candidates)
+    close_char = b'"' if line[open_pos:open_pos + 1] == b'"' else b">"
+    close_pos = line.find(close_char, open_pos + 1)
+    if close_pos < 0:
+        return line, False
+
+    operand = line[open_pos + 1:close_pos]
+    if BACKSLASH not in operand:
+        return line, False
+
+    normalized = operand.replace(BACKSLASH, b"/")
+    return (
+        line[:open_pos + 1] + normalized + line[close_pos:],
+        True,
+    )
 
 def main() -> int:
     changed_files = 0
@@ -27,17 +56,17 @@ def main() -> int:
                 continue
 
             original = path.read_bytes()
-            def normalize(match: re.Match[bytes]) -> bytes:
-                nonlocal changed_includes
-                operand = match.group(3)
-                normalized = operand.replace(b"\\\\", b"/")
-                if normalized != operand:
+            output = []
+            file_changed = False
+            for line in original.splitlines(keepends=True):
+                updated, changed = normalize_line(line)
+                output.append(updated)
+                if changed:
                     changed_includes += 1
-                return match.group(1) + match.group(2) + normalized + match.group(4)
+                    file_changed = True
 
-            updated = INCLUDE.sub(normalize, original)
-            if updated != original:
-                path.write_bytes(updated)
+            if file_changed:
+                path.write_bytes(b"".join(output))
                 changed_files += 1
 
     print(f"Normalized {changed_includes} include paths across {changed_files} source files.")
