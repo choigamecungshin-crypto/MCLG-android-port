@@ -60,7 +60,9 @@ set(MCLG_PLATFORM_EXCLUDES
     "/PSVitaExtras/"
 )
 
-set(MCLG_ENGINE_SOURCES)
+set(MCLG_ENGINE_SOURCES
+    "${MCLG_CLIENT_DIR}/Android/Android_App.cpp"
+)
 foreach(source IN LISTS MCLG_WORLD_SOURCES MCLG_CLIENT_ROOT_SOURCES MCLG_COMMON_SOURCES)
     set(excluded FALSE)
     foreach(platform_path IN LISTS MCLG_PLATFORM_EXCLUDES)
