@@ -4336,8 +4336,16 @@ void Minecraft::startAndConnectTo(const wstring& name, const wstring& sid, const
 	}
 	});
 	*/
+	// Android owns the frame cadence through GLSurfaceView. Calling run()
+	// here would enter the original blocking while(running) loop and starve
+	// the UI/GL thread before the first frame can be presented.
+#if defined(ANDROID) || defined(__ANDROID__) || defined(MCLG_ANDROID)
+	minecraft->running = true;
+	minecraft->init();
+#else
 	// 4J - TODO - consider whether we need to actually create a thread here
 	minecraft->run();
+#endif
 }
 
 ClientConnection *Minecraft::getConnection(int iPad)
