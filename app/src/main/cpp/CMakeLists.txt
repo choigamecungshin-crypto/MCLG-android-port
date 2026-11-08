@@ -3,10 +3,11 @@ project(mclg_android LANGUAGES C CXX)
 
 # Android ARM64 host + the original Legacy Edition engine sources.
 # Keep source discovery constrained to directories that actually contain
-# portable game/client translation units. The repository also contains a
-# large platform/media tree (textures, audio, SDK headers, etc.); recursively
-# globbing the whole client tree makes AGP's CMake model consume excessive RAM.
-set(CMAKE_CXX_STANDARD 17)
+# game/client translation units. The repository's engine predates C++17;
+# compile it as C++14 so libc++ does not inject std::byte into the global
+# namespace used by the original headers. The JNI host may use newer C++.
+# The platform/media tree is intentionally excluded from recursive discovery.
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
