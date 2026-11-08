@@ -9,6 +9,10 @@
 #include "..\\Minecraft.World\\AndroidCompat.h"
 #endif
 
+#if defined(__ANDROID__) && !defined(_WIN32)
+#include "..\\Minecraft.World\\AndroidCompat.h"
+#endif
+
 //#include <xtl.h>
 //#include <xboxmath.h>
 
@@ -46,6 +50,24 @@
 #include "OrbisStubs.h"
 #include "OrbisMaths.h"
 #define HRESULT_SUCCEEDED(hr) (((HRESULT)(hr)) >= 0)
+#elif defined(__ANDROID__)
+#include <stdio.h>
+#include <stdlib.h>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+#elif defined(__ANDROID__)
+	#include "Android\Android_App.h"
+	#include "Windows64Media\strings.h"
+	#include "Windows64\Sentient\MinecraftTelemetry.h"
+	#include "Windows64\Sentient\SentientTelemetryCommon.h"
+	#include "Windows64\Sentient\TelemetryEnum.h"
+	#include "Windows64\Sentient\DynamicConfigurations.h"
+	#include "Windows64\GameConfig\Minecraft.spa.h"
+	#include "Common\Audio\SoundEngine.h"
+	#include "Windows64\Iggy\include\iggy.h"
+	#include "Windows64\Iggy\gdraw\gdraw_d3d11.h"
+	#include "Windows64\Windows64_UIController.h"
 #elif defined __PSVITA__
 #include <stdio.h>
 #include <stdlib.h>
@@ -177,7 +199,7 @@ typedef XUID GameSessionUID;
 	#include "Durango\4JLibs\inc\4J_Profile.h"
 	#include "Durango\4JLibs\inc\4J_Render.h"
 	#include "Durango\4JLibs\inc\4J_Storage.h"
-#elif defined _WINDOWS64
+#elif defined _WINDOWS64 || defined(__ANDROID__)
 	#include "Windows64\4JLibs\inc\4J_Input.h"	
 	#include "Windows64\4JLibs\inc\4J_Profile.h"
 	#include "Windows64\4JLibs\inc\4J_Render.h"
