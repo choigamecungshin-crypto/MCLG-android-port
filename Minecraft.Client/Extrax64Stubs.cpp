@@ -185,6 +185,7 @@ D3DXVECTOR3::D3DXVECTOR3() {}
 D3DXVECTOR3::D3DXVECTOR3(float x,float y,float z) : x(x), y(y), z(z) {}
 D3DXVECTOR3& D3DXVECTOR3::operator += ( CONST D3DXVECTOR3& add ) { x += add.x; y += add.y; z += add.z; return *this; }
 
+#if !defined(__ANDROID__)
 BYTE IQNetPlayer::GetSmallId() { return 0; }
 void IQNetPlayer::SendData(IQNetPlayer *player, const void *pvData, DWORD dwDataSize, DWORD dwFlags)
 {
@@ -227,6 +228,8 @@ bool IQNet::IsHost() { return true; }
 HRESULT IQNet::JoinGameFromInviteInfo(DWORD dwUserIndex, DWORD dwUserMask, const INVITE_INFO *pInviteInfo) { return S_OK; }
 void IQNet::HostGame() { _bQNetStubGameRunning = true; }
 void IQNet::EndGame() { _bQNetStubGameRunning = false; }
+#endif // !__ANDROID__
+
 
 DWORD MinecraftDynamicConfigurations::GetTrialTime() { return DYNAMIC_CONFIG_DEFAULT_TRIAL_TIME; }
 
@@ -380,7 +383,7 @@ DWORD XEnableGuestSignin(BOOL fEnable) { return 0; }
 
 
 /////////////////////////////////////////////// Profile library
-#ifdef _WINDOWS64
+#if defined(_WINDOWS64) || defined(__ANDROID__)
 static void *profileData[4];
 static bool s_bProfileIsFullVersion;
 void				C_4JProfile::Initialise( DWORD dwTitleID,
