@@ -9,6 +9,9 @@
 extern "C" void MclgAndroidRendererInitialize();
 extern "C" void MclgAndroidRendererResize(int width, int height);
 extern "C" void MclgAndroidRendererBeginFrame();
+extern "C" void MclgAndroidInputButton(unsigned int mask, int pressed);
+extern "C" void MclgAndroidInputMove(float x, float y);
+extern "C" void MclgAndroidInputLook(float dx, float dy);
 
 // All renderer callbacks are invoked by GLSurfaceView on its GL thread.
 // This flag is therefore only read and written on that thread.
@@ -90,4 +93,19 @@ Java_dev_mc_legacy_MainActivity_nativeRender(JNIEnv*, jobject) {
         LOGE("GLES render failed with error 0x%x; disabling native rendering", renderError);
         g_glesReady = false;
     }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_dev_mc_legacy_MainActivity_nativeInputButton(JNIEnv*, jobject, jint mask, jboolean pressed) {
+    MclgAndroidInputButton(static_cast<unsigned int>(mask), pressed == JNI_TRUE ? 1 : 0);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_dev_mc_legacy_MainActivity_nativeInputMove(JNIEnv*, jobject, jfloat x, jfloat y) {
+    MclgAndroidInputMove(x, y);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_dev_mc_legacy_MainActivity_nativeInputLook(JNIEnv*, jobject, jfloat dx, jfloat dy) {
+    MclgAndroidInputLook(dx, dy);
 }
