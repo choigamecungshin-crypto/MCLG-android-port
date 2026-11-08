@@ -17,6 +17,7 @@ extern "C" void MclgAndroidInputButton(unsigned int mask, int pressed);
 extern "C" void MclgAndroidInputMove(float x, float y);
 extern "C" void MclgAndroidInputLook(float dx, float dy);
 extern "C" void MclgAndroidInputTouch(float x, float y, int pressed);
+extern "C" void MclgAndroidInputTrigger(int right, int value);
 extern "C" bool MclgAndroidGameInitialize();
 extern "C" void MclgAndroidGameFrame();
 extern "C" void MclgAndroidGameResize(int width, int height);
@@ -147,6 +148,11 @@ Java_dev_mc_legacy_MainActivity_nativeInputMove(JNIEnv*, jobject, jfloat x, jflo
 extern "C" JNIEXPORT void JNICALL
 Java_dev_mc_legacy_MainActivity_nativeInputLook(JNIEnv*, jobject, jfloat dx, jfloat dy) {
     MclgAndroidInputLook(dx, dy);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_dev_mc_legacy_MainActivity_nativeInputTrigger(JNIEnv*, jobject, jboolean right, jint value) {
+    MclgAndroidInputTrigger(right == JNI_TRUE ? 1 : 0, value);
 }
 
 extern "C" JNIEXPORT void JNICALL
