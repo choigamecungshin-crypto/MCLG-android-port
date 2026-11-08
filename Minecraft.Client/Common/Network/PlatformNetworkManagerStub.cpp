@@ -116,6 +116,11 @@ void CPlatformNetworkManagerStub::NotifyPlayerJoined(IQNetPlayer *pQNetPlayer	)
 
 bool CPlatformNetworkManagerStub::Initialise(CGameNetworkManager *pGameNetworkManager, int flagIndexSize)
 {
+#if defined(__ANDROID__)
+	// The original console stub expected the platform QNet library to inject
+	// this pointer. Android supplies a local single-player QNet implementation.
+	m_pIQNet = new IQNet();
+#endif
 	m_pGameNetworkManager = pGameNetworkManager;
 	m_flagIndexSize = flagIndexSize;
 	g_pPlatformNetworkManager = this;
