@@ -14,6 +14,13 @@
 #include <thread>
 #include <pthread.h>
 
+#ifndef TRUE
+#define TRUE 1
+#endif
+#ifndef FALSE
+#define FALSE 0
+#endif
+
 #ifndef WINAPI
 #define WINAPI
 #endif
@@ -25,6 +32,7 @@ using BYTE = std::uint8_t;
 using VOID = void;
 using __int64 = long long;
 using __int32 = int;
+using __uint64 = unsigned long long;
 #ifndef CONST
 #define CONST const
 #endif
@@ -34,6 +42,7 @@ using UINT = std::uint32_t;
 using ULONG = std::uint32_t;
 using LONG = std::int32_t;
 using BOOL = int;
+using FLOAT = float;
 using INT = int;
 using SHORT = std::int16_t;
 using USHORT = std::uint16_t;
@@ -48,6 +57,7 @@ using LPWSTR = wchar_t*;
 using LPCSTR = const char*;
 using LPSTR = char*;
 using LPVOID = void*;
+using PVOID = void*;
 using LPCVOID = const void*;
 using HANDLE = void*;
 using PBYTE = BYTE*;
