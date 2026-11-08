@@ -193,6 +193,10 @@ bool C_4JInput::VerifyStrings(WCHAR**, int, int (*callback)(LPVOID, STRING_VERIF
 void C_4JInput::CancelQueuedVerifyStrings(int (*)(LPVOID, STRING_VERIFY_RESPONSE*), LPVOID) {}
 void C_4JInput::CancelAllVerifyInProgress() {}
 
+extern "C" void MclgAndroidInputInitialize() {
+    InputManager.Initialise(1, 3, 24, 24);
+}
+
 extern "C" void MclgAndroidInputButton(unsigned int mask, int pressed) {
     std::lock_guard<std::mutex> lock(g_inputMutex);
     AndroidPadState& pad = g_pads[0];
