@@ -47,12 +47,12 @@ bool Tag::equals(Tag *obj)
 	return true;
 }
 
-void Tag::print(ostream out)
+void Tag::print(ostream &out)
 {
 	out << "";
 }
 
-void Tag::print(char *prefix, wostream out)
+void Tag::print(char *prefix, ostream &out)\n{\n    out << prefix << getTagName(getId()) << ": ";\n    const std::wstring value = toString();\n    for (wchar_t ch : value) out << (ch >= 0 && ch < 128 ? static_cast<char>(ch) : '?');\n    out << std::endl;\n}\n\nvoid Tag::print(char *prefix, wostream &out)
 {
 	wstring name = getName();
 
