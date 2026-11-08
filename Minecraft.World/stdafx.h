@@ -172,6 +172,11 @@ void MemSect(int sect);
 #include "..\Minecraft.Client\Windows64\4JLibs\inc\4J_Render.h"
 #include "..\Minecraft.Client\Windows64\4JLibs\inc\4J_Storage.h"
 #include "..\Minecraft.Client\Windows64\4JLibs\inc\4J_Input.h"
+#elif defined(__ANDROID__)
+#include "..\Minecraft.Client\Windows64\4JLibs\inc\4J_Profile.h"
+#include "..\Minecraft.Client\Windows64\4JLibs\inc\4J_Render.h"
+#include "..\Minecraft.Client\Windows64\4JLibs\inc\4J_Storage.h"
+#include "..\Minecraft.Client\Windows64\4JLibs\inc\4J_Input.h"
 #elif defined __PSVITA__
 #include "..\Minecraft.Client\PSVita\4JLibs\inc\4J_Profile.h"
 #include "..\Minecraft.Client\PSVita\4JLibs\inc\4J_Render.h"
@@ -230,6 +235,9 @@ void MemSect(int sect);
 #include "..\Minecraft.Client\Windows64\Sentient\SentientTelemetryCommon.h"
 #include "..\Minecraft.Client\Windows64\Sentient\MinecraftTelemetry.h"
 
+#elif defined(__ANDROID__)
+#include "..\Minecraft.Client\Android\Android_App.h"
+#include "..\Minecraft.Client\Windows64Media\strings.h"
 #elif defined __PSVITA__
 #include "..\Minecraft.Client\PSVita\PSVita_App.h"
 #include "..\Minecraft.Client\PSVitaMedia\strings.h"		// TODO - create PSVita-specific version of this
