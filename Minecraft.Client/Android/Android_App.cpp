@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "Minecraft.h"
+#include "Screen.h"
 
 #include <android/log.h>
 
@@ -101,4 +102,20 @@ void CConsoleMinecraftApp::ReadBannedList(int, eTMSAction, bool) {}
 void CConsoleMinecraftApp::TemporaryCreateGameStart()
 {
     app.SetTutorialMode(false);
+}
+
+extern "C" void MclgAndroidInputTouch(float x, float y, int pressed)
+{
+    Minecraft* game = Minecraft::GetInstance();
+    if (!g_androidGameStarted || game == NULL || game->screen == NULL ||
+        game->width <= 0 || game->height <= 0)
+        return;
+
+    Screen* screen = game->screen;
+    const int screenX = static_cast<int>(x * screen->width);
+    const int screenY = screen->height - static_cast<int>(y * screen->height) - 1;
+    if (pressed)
+        screen->mouseClicked(screenX, screenY, 0);
+    else
+        screen->mouseReleased(screenX, screenY, 0);
 }
