@@ -117,13 +117,19 @@ extern "C" bool MclgAndroidGameInitialize()
             __android_log_print(ANDROID_LOG_ERROR, "MCLG-Android", "Minecraft bootstrap returned without an instance");
             return false;
         }
+        if (game->screen == NULL || game->user == NULL)
+        {
+            __android_log_print(ANDROID_LOG_ERROR, "MCLG-Android",
+                                "Legacy client initialization did not create its title screen and local user");
+            return false;
+        }
 
         app.InitGameSettings();
         app.InitialiseTips();
         if (game->user != NULL) game->user->name = L"Player";
 
         g_androidGameStarted = true;
-        __android_log_print(ANDROID_LOG_INFO, "MCLG-Android", "Legacy client initialized (%d x %d)", game->width, game->height);
+        __android_log_print(ANDROID_LOG_INFO, "MCLG-Android", "Legacy client initialized (%d x %d; title screen ready)", game->width, game->height);
         return true;
     }
     catch (...)
