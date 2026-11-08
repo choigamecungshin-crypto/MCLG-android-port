@@ -25,7 +25,7 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
     private lateinit var surface: GLSurfaceView
     @Volatile private var nativeReady = false
 
-    private external fun nativeInit(): Boolean
+    private external fun nativeInit(storagePath: String): Boolean
     private external fun nativeResize(width: Int, height: Int)
     private external fun nativeRender()
     private external fun nativeInputButton(mask: Int, pressed: Boolean)
@@ -37,6 +37,14 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
         collectPreviousExitInfo()
         showPreviousCrashIfPresent()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        try {
+            installGameResources()
+        } catch (error: Throwable) {
+            recordCrash("Legacy resource installation", error)
+            showStartupError(error)
+            return
+        }
 
         if (!nativeLibraryLoaded) {
             Log.e(TAG, "Native renderer is unavailable; showing a safe fallback surface")
@@ -80,6 +88,36 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
 
     }
 
+
+    private fun installGameResources() {
+        val destination = File(filesDir, "Common/res/TitleUpdate/res")
+        val marker = File(filesDir, ".mclg-base-resources")
+        val resourceVersion = "legacy-base-resources-1"
+        if (destination.isDirectory && marker.isFile && marker.readText() == resourceVersion) {
+            return
+        }
+
+        destination.deleteRecursively()
+        copyAssetTree("Common/res/TitleUpdate/res", destination)
+        marker.writeText(resourceVersion)
+        Log.i(TAG, "Installed Legacy base resources into ${destination.absolutePath}")
+    }
+
+    private fun copyAssetTree(assetPath: String, destination: File) {
+        val children = assets.list(assetPath) ?: emptyArray()
+        if (children.isEmpty()) {
+            destination.parentFile?.mkdirs()
+            assets.open(assetPath).use { input ->
+                destination.outputStream().use { output -> input.copyTo(output) }
+            }
+            return
+        }
+
+        destination.mkdirs()
+        for (child in children) {
+            copyAssetTree("$assetPath/$child", File(destination, child))
+        }
+    }
 
     // Native SIGSEGVs cannot be caught by a Java uncaught-exception handler.
     // Android records the previous process exit; collect its tombstone/trace
@@ -191,7 +229,7 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
         if (!nativeLibraryLoaded) return
 
         nativeReady = try {
-            nativeInit()
+            nativeInit(filesDir.absolutePath)
         } catch (error: Throwable) {
             recordCrash("JNI nativeInit", error)
             false
