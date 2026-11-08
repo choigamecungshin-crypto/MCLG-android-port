@@ -234,11 +234,19 @@ void CConsoleMinecraftApp::FreeLocalTMSFiles(eTMSFileType) {}
 int CConsoleMinecraftApp::GetLocalTMSFileIndex(WCHAR*, bool, eFileExtensionType) { return -1; }
 void CConsoleMinecraftApp::ReadBannedList(int, eTMSAction, bool) {}
 
-// World creation is routed through the Android world-selection UI. This hook
-// remains the console app's game-start entry point for when that flow is wired.
+// The original Legacy UI calls this hook after the player confirms the
+// Create World screen. Route that existing action into the Android offline
+// integrated-server path instead of leaving the callback as a no-op.
+extern "C" bool MclgAndroidStartWorld(const wchar_t* worldName, __int64 seed);
+
 void CConsoleMinecraftApp::TemporaryCreateGameStart()
 {
     app.SetTutorialMode(false);
+    const __int64 seed = System::currentTimeMillis();
+    if (!MclgAndroidStartWorld(L"World", seed)) {
+        __android_log_print(ANDROID_LOG_ERROR, "MCLG-Android",
+                            "The Create World action could not start the local world");
+    }
 }
 
 static void configureAndroidLocalGame()
