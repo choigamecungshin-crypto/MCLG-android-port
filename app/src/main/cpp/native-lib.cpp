@@ -6,6 +6,10 @@
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
+extern "C" void MclgAndroidRendererInitialize();
+extern "C" void MclgAndroidRendererResize(int width, int height);
+extern "C" void MclgAndroidRendererBeginFrame();
+
 // All renderer callbacks are invoked by GLSurfaceView on its GL thread.
 // This flag is therefore only read and written on that thread.
 static bool g_glesReady = false;
@@ -37,6 +41,8 @@ Java_dev_mc_legacy_MainActivity_nativeInit(JNIEnv*, jobject) {
         return JNI_FALSE;
     }
 
+    MclgAndroidRendererInitialize();
+
     glDisable(GL_DITHER);
     glClearColor(0.025f, 0.035f, 0.055f, 1.0f);
     glClearDepthf(1.0f);
@@ -67,7 +73,7 @@ Java_dev_mc_legacy_MainActivity_nativeResize(
         return;
     }
 
-    glViewport(0, 0, width, height);
+    MclgAndroidRendererResize(width, height);
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -76,6 +82,7 @@ Java_dev_mc_legacy_MainActivity_nativeRender(JNIEnv*, jobject) {
         return;
     }
 
+    MclgAndroidRendererBeginFrame();
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     const GLenum renderError = glGetError();
