@@ -9,6 +9,12 @@ BiomeOverrideLayer::BiomeOverrideLayer(int seedMixup) : Layer(seedMixup)
 {
 	m_biomeOverride = byteArray( width * height );
 
+#if defined(__ANDROID__)
+	// Legacy console editions load this optional map from a console title
+	// storage path. Android worlds do not ship that file; keep the original
+	// vanilla fallback biome until the Android world-rules file is provided.
+	memset(m_biomeOverride.data, Biome::plains->id, m_biomeOverride.length);
+#else
 #ifdef _UNICODE
 	wstring path = L"GAME:\\GameRules\\biomemap.bin";
 	HANDLE file = CreateFile(path.c_str(), GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -51,6 +57,7 @@ BiomeOverrideLayer::BiomeOverrideLayer(int seedMixup) : Layer(seedMixup)
 
 		CloseHandle(file);
 	}
+#endif
 }
 
 intArray BiomeOverrideLayer::getArea(int xo, int yo, int w, int h)
