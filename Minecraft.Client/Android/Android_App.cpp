@@ -17,6 +17,9 @@
 #include <deque>
 #include <mutex>
 
+// Implemented by Android_Input.cpp and shared by the native app event pump.
+extern "C" void MclgAndroidInputButton(unsigned int mask, int pressed);
+
 namespace {
 bool g_androidGameStarted = false;
 bool g_androidNetworkStarted = false;
