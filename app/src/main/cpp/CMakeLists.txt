@@ -84,6 +84,7 @@ message(STATUS "MCLG: compiling ${MCLG_ENGINE_SOURCE_COUNT} shared engine transl
 set(MCLG_INCLUDE_DIRS
     "${MCLG_WORLD_DIR}"
     "${MCLG_WORLD_DIR}/x64headers"
+    "${MCLG_CLIENT_DIR}/PS3/PS3Extras/DirectX"
     "${MCLG_CLIENT_DIR}"
     "${MCLG_COMMON_DIR}"
     ${MCLG_COMMON_SOURCE_DIRS}
