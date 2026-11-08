@@ -232,7 +232,10 @@ void C4JStorage::SetDefaultSaveNameForKeyboardDisplay(LPCWSTR name)
 }
 void C4JStorage::SetSaveTitle(LPCWSTR title)
 {
-    if (title) g_saveTitle = title;
+    if (title) {
+        g_saveTitle = title;
+        g_saveFilename = wideToAscii(title);
+    }
 }
 bool C4JStorage::GetSaveUniqueNumber(INT* value)
 {
