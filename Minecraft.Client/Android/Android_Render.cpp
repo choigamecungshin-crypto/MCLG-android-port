@@ -567,12 +567,32 @@ void C4JRender::TextureBindVertex(int index) { TextureBind(index); }
 void C4JRender::TextureSetTextureLevels(int levels) { g_textureLevels = levels > 0 ? levels : 1; }
 int C4JRender::TextureGetTextureLevels() { return g_textureLevels; }
 void C4JRender::TextureData(int width, int height, void* data, int level, eTextureFormat) {
-    if (width <= 0 || height <= 0) return;
-    glTexImage2D(GL_TEXTURE_2D, level, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    if (width <= 0 || height <= 0 || data == nullptr) return;
+    const std::uint32_t* source = static_cast<const std::uint32_t*>(data);
+    std::vector<std::uint8_t> rgba(static_cast<std::size_t>(width) * height * 4);
+    for (std::size_t i = 0, count = static_cast<std::size_t>(width) * height; i < count; ++i) {
+        const std::uint32_t pixel = source[i];
+        rgba[i * 4 + 0] = static_cast<std::uint8_t>((pixel >> 16) & 0xff);
+        rgba[i * 4 + 1] = static_cast<std::uint8_t>((pixel >> 8) & 0xff);
+        rgba[i * 4 + 2] = static_cast<std::uint8_t>(pixel & 0xff);
+        rgba[i * 4 + 3] = static_cast<std::uint8_t>((pixel >> 24) & 0xff);
+    }
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, level, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
 }
 void C4JRender::TextureDataUpdate(int x, int y, int width, int height, void* data, int level) {
-    if (width <= 0 || height <= 0) return;
-    glTexSubImage2D(GL_TEXTURE_2D, level, x, y, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    if (width <= 0 || height <= 0 || data == nullptr) return;
+    const std::uint32_t* source = static_cast<const std::uint32_t*>(data);
+    std::vector<std::uint8_t> rgba(static_cast<std::size_t>(width) * height * 4);
+    for (std::size_t i = 0, count = static_cast<std::size_t>(width) * height; i < count; ++i) {
+        const std::uint32_t pixel = source[i];
+        rgba[i * 4 + 0] = static_cast<std::uint8_t>((pixel >> 16) & 0xff);
+        rgba[i * 4 + 1] = static_cast<std::uint8_t>((pixel >> 8) & 0xff);
+        rgba[i * 4 + 2] = static_cast<std::uint8_t>(pixel & 0xff);
+        rgba[i * 4 + 3] = static_cast<std::uint8_t>((pixel >> 24) & 0xff);
+    }
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexSubImage2D(GL_TEXTURE_2D, level, x, y, width, height, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
 }
 void C4JRender::TextureSetParam(int param, int value) {
     GLenum name = 0;
