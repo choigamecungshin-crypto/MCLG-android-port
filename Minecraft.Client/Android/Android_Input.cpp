@@ -171,8 +171,8 @@ extern "C" void MclgAndroidInputMove(float x, float y) {
 extern "C" void MclgAndroidInputLook(float dx, float dy) {
     std::lock_guard<std::mutex> lock(g_inputMutex);
     AndroidPadState& pad = g_pads[0];
-    pad.rx = clampAxis(pad.rx + dx * pad.sensitivity);
-    pad.ry = clampAxis(pad.ry + dy * pad.sensitivity);
+    pad.rx = clampAxis(dx * pad.sensitivity);
+    pad.ry = clampAxis(dy * pad.sensitivity);
     pad.lastInput = std::chrono::steady_clock::now();
 }
 extern "C" void MclgAndroidInputTrigger(int right, int value) {
