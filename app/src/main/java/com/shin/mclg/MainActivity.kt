@@ -140,7 +140,38 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
         return super.dispatchKeyEvent(event)
     }
 
+
+    private fun handleMouseButtons(event: MotionEvent): Boolean {
+        if (event.actionMasked != MotionEvent.ACTION_BUTTON_PRESS &&
+            event.actionMasked != MotionEvent.ACTION_BUTTON_RELEASE) return false
+        if (!nativeReady) return true
+        val pressed = event.actionMasked == MotionEvent.ACTION_BUTTON_PRESS
+        when (event.actionButton) {
+            MotionEvent.BUTTON_PRIMARY -> nativeInputButton(0x00400000, pressed)
+            MotionEvent.BUTTON_SECONDARY -> nativeInputButton(0x00800000, pressed)
+            MotionEvent.BUTTON_TERTIARY -> nativeInputButton(0x00000020, pressed)
+        }
+        return true
+    }
+
+    private fun clearHardwareInput() {
+        if (nativeReady) {
+            for (mask in intArrayOf(
+                0x00000001, 0x00000002, 0x00000004, 0x00000008,
+                0x00000010, 0x00000020, 0x00000040, 0x00000080,
+                0x00000100, 0x00000200, 0x00000400, 0x00000800,
+                0x00001000, 0x00002000, 0x00400000, 0x00800000
+            )) nativeInputButton(mask, false)
+            nativeInputMove(0f, 0f)
+            nativeInputLook(0f, 0f)
+            nativeInputTrigger(false, 0)
+            nativeInputTrigger(true, 0)
+        }
+        heldKeys.clear()
+    }
+
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
+        if (handleMouseButtons(event)) return true
         val source = event.source
         if ((source and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK ||
             (source and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD) {
@@ -166,6 +197,7 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
     }
 
     override fun onCapturedPointerEvent(event: MotionEvent): Boolean {
+        if (handleMouseButtons(event)) return true
         if (nativeReady && event.action == MotionEvent.ACTION_MOVE) {
             nativeInputLook(
                 event.getAxisValue(MotionEvent.AXIS_RELATIVE_X) * 0.012f,
@@ -357,6 +389,7 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
     }
 
     override fun onPause() {
+        clearHardwareInput()
         if (::surface.isInitialized) surface.onPause()
         super.onPause()
     }
