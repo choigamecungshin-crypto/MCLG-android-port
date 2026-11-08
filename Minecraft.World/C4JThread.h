@@ -214,6 +214,11 @@ private:
 	Event			*m_completionFlag;
 	int				m_priority;
 	static SceInt32	entryPoint(SceSize argSize, void *pArgBlock);
+#elif defined(__ANDROID__)
+	pthread_t m_threadID;
+	bool m_threadCreated;
+	Event *m_completionFlag;
+	static void* entryPoint(void* lpParam);
 #else
 	DWORD m_threadID;
 	HANDLE m_threadHandle;
