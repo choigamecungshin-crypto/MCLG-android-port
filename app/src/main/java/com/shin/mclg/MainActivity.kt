@@ -10,6 +10,8 @@ import android.opengl.GLSurfaceView
 import android.os.Bundle
 import android.util.Log
 import android.view.WindowManager
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.TextView
 import java.io.File
 import java.io.PrintWriter
@@ -21,11 +23,14 @@ import javax.microedition.khronos.opengles.GL10
 
 class MainActivity : Activity(), GLSurfaceView.Renderer {
     private lateinit var surface: GLSurfaceView
-    private var nativeReady = false
+    @Volatile private var nativeReady = false
 
     private external fun nativeInit(): Boolean
     private external fun nativeResize(width: Int, height: Int)
     private external fun nativeRender()
+    private external fun nativeInputButton(mask: Int, pressed: Boolean)
+    private external fun nativeInputMove(x: Float, y: Float)
+    private external fun nativeInputLook(dx: Float, dy: Float)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,8 +50,29 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
                 setRenderer(this@MainActivity)
                 renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
             }
-            setContentView(surface)
-            Log.i(TAG, "Activity created; requesting OpenGL ES 3.0")
+            val root = FrameLayout(this).apply {
+                addView(
+                    surface,
+                    FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                )
+                addView(
+                    AndroidTouchControls(
+                        this@MainActivity,
+                        { mask, pressed -> if (nativeReady) nativeInputButton(mask, pressed) },
+                        { x, y -> if (nativeReady) nativeInputMove(x, y) },
+                        { dx, dy -> if (nativeReady) nativeInputLook(dx, dy) }
+                    ),
+                    FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                )
+            }
+            setContentView(root)
+            Log.i(TAG, "Activity created; requesting OpenGL ES 3.0 with touch controls")
         } catch (error: Throwable) {
             recordCrash("Activity/EGL setup", error)
             showStartupError(error)
