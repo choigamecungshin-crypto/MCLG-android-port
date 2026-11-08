@@ -34,9 +34,9 @@ jobs:
 
       - name: Restore the permanent signing key
         env:
-          GH_TOKEN: ${{ github.token }}
-          KEYSTORE_BASE64: ${{ secrets.MCLG_KEYSTORE_BASE64 }}
-          MCLG_STORE_PASSWORD: ${{ secrets.MCLG_STORE_PASSWORD || 'mclg123' }}
+          GH_TOKEN: \${{ github.token }}
+          KEYSTORE_BASE64: \${{ secrets.MCLG_KEYSTORE_BASE64 }}
+          MCLG_STORE_PASSWORD: \${{ secrets.MCLG_STORE_PASSWORD || 'mclg123' }}
         run: |
           set -euo pipefail
 
@@ -74,12 +74,15 @@ jobs:
             -storepass "$MCLG_STORE_PASSWORD" -alias mclg >/dev/null
           echo "Permanent signing key verified."
 
+      - name: Normalize legacy include separators for Android Clang
+        run: python3 .github/scripts/normalize_android_includes.py
+
       - name: Build signed release APK
         env:
-          MCLG_KEYSTORE_PATH: ${{ github.workspace }}/mclg-release.jks
-          MCLG_STORE_PASSWORD: ${{ secrets.MCLG_STORE_PASSWORD || 'mclg123' }}
+          MCLG_KEYSTORE_PATH: \${{ github.workspace }}/mclg-release.jks
+          MCLG_STORE_PASSWORD: \${{ secrets.MCLG_STORE_PASSWORD || 'mclg123' }}
           MCLG_KEY_ALIAS: mclg
-          MCLG_KEY_PASSWORD: ${{ secrets.MCLG_KEY_PASSWORD || 'mclg123' }}
+          MCLG_KEY_PASSWORD: \${{ secrets.MCLG_KEY_PASSWORD || 'mclg123' }}
         run: gradle --no-daemon :app:assembleRelease
 
       - name: Upload signed APK
