@@ -115,7 +115,7 @@ extern "C" void MclgAndroidInputTouch(float x, float y, int pressed)
     const int screenX = static_cast<int>(x * screen->width);
     const int screenY = screen->height - static_cast<int>(y * screen->height) - 1;
     if (pressed)
-        screen->mouseClicked(screenX, screenY, 0);
+        screen->handleAndroidTouch(screenX, screenY, true);
     else
-        screen->mouseReleased(screenX, screenY, 0);
+        screen->handleAndroidTouch(screenX, screenY, false);
 }
