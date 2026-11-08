@@ -8,6 +8,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <cwchar>
+#include <cstring>
+#include <ctime>
+#include <chrono>
+#include <thread>
 #include <pthread.h>
 
 #ifndef WINAPI
@@ -53,6 +57,26 @@ using HRESULT = std::int32_t;
 using WPARAM = std::uintptr_t;
 using LPARAM = std::intptr_t;
 using LRESULT = std::intptr_t;
+struct LARGE_INTEGER { LONGLONG QuadPart; };
+
+#ifndef ZeroMemory
+#define ZeroMemory(destination, length) std::memset((destination), 0, (length))
+#endif
+
+static inline BOOL QueryPerformanceCounter(LARGE_INTEGER* value) {
+    if (!value) return FALSE;
+    const auto now = std::chrono::steady_clock::now().time_since_epoch();
+    value->QuadPart = std::chrono::duration_cast<std::chrono::nanoseconds>(now).count();
+    return TRUE;
+}
+static inline BOOL QueryPerformanceFrequency(LARGE_INTEGER* value) {
+    if (!value) return FALSE;
+    value->QuadPart = 1000000000LL;
+    return TRUE;
+}
+static inline void Sleep(DWORD milliseconds) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));
+}
 
 // D3D11 handles are kept opaque at the legacy API boundary. The Android
 // renderer implements the C4JRender contract on GLES and never dereferences
