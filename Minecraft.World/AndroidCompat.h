@@ -18,6 +18,12 @@
 #endif
 
 using BYTE = std::uint8_t;
+using VOID = void;
+using __int64 = long long;
+using __int32 = int;
+#ifndef CONST
+#define CONST const
+#endif
 using WORD = std::uint16_t;
 using DWORD = std::uint32_t;
 using UINT = std::uint32_t;
