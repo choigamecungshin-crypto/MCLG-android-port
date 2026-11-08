@@ -13,10 +13,15 @@ extern "C" void MclgAndroidInputInitialize();
 extern "C" void MclgAndroidInputButton(unsigned int mask, int pressed);
 extern "C" void MclgAndroidInputMove(float x, float y);
 extern "C" void MclgAndroidInputLook(float dx, float dy);
+extern "C" bool MclgAndroidGameInitialize();
+extern "C" void MclgAndroidGameFrame();
+extern "C" void MclgAndroidGameResize(int width, int height);
+extern "C" void MclgAndroidGameShutdown();
 
 // All renderer callbacks are invoked by GLSurfaceView on its GL thread.
 // This flag is therefore only read and written on that thread.
 static bool g_glesReady = false;
+static bool g_gameReady = false;
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_mc_legacy_MainActivity_nativeInit(JNIEnv*, jobject) {
@@ -47,6 +52,10 @@ Java_dev_mc_legacy_MainActivity_nativeInit(JNIEnv*, jobject) {
 
     MclgAndroidRendererInitialize();
     MclgAndroidInputInitialize();
+    g_gameReady = MclgAndroidGameInitialize();
+    if (!g_gameReady) {
+        LOGE("Minecraft client startup failed; keeping diagnostic GLES surface active");
+    }
 
     glDisable(GL_DITHER);
     glClearColor(0.025f, 0.035f, 0.055f, 1.0f);
@@ -79,6 +88,7 @@ Java_dev_mc_legacy_MainActivity_nativeResize(
     }
 
     MclgAndroidRendererResize(width, height);
+    if (g_gameReady) MclgAndroidGameResize(width, height);
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -88,7 +98,11 @@ Java_dev_mc_legacy_MainActivity_nativeRender(JNIEnv*, jobject) {
     }
 
     MclgAndroidRendererBeginFrame();
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    if (g_gameReady) {
+        MclgAndroidGameFrame();
+    } else {
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    }
 
     const GLenum renderError = glGetError();
     if (renderError != GL_NO_ERROR) {
