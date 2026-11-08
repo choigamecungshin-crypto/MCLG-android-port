@@ -242,6 +242,9 @@ void MemSect(int sect);
 #elif defined(__ANDROID__)
 #include "..\Minecraft.Client\Android\Android_App.h"
 #include "..\Minecraft.Client\Windows64Media\strings.h"
+#include "..\Minecraft.Client\Windows64\Sentient\SentientTelemetryCommon.h"
+#include "..\Minecraft.Client\Windows64\Sentient\TelemetryEnum.h"
+#include "..\Minecraft.Client\Windows64\Sentient\MinecraftTelemetry.h"
 #elif defined __PSVITA__
 #include "..\Minecraft.Client\PSVita\PSVita_App.h"
 #include "..\Minecraft.Client\PSVitaMedia\strings.h"		// TODO - create PSVita-specific version of this
