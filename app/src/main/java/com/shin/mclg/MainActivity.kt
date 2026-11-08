@@ -227,17 +227,21 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
     }
 
     private fun installGameResources() {
-        val destination = File(filesDir, "Common/res/TitleUpdate/res")
+        val resourceRoot = File(filesDir, "Common/res")
+        val mediaRoot = File(filesDir, "Common/Media")
         val marker = File(filesDir, ".mclg-base-resources")
-        val resourceVersion = "legacy-base-resources-1"
-        if (destination.isDirectory && marker.isFile && marker.readText() == resourceVersion) {
+        val resourceVersion = "legacy-base-resources-2"
+        if (resourceRoot.isDirectory && mediaRoot.isDirectory &&
+            marker.isFile && marker.readText() == resourceVersion) {
             return
         }
 
-        destination.deleteRecursively()
-        copyAssetTree("Common/res/TitleUpdate/res", destination)
+        resourceRoot.deleteRecursively()
+        mediaRoot.deleteRecursively()
+        copyAssetTree("Common/res", resourceRoot)
+        copyAssetTree("Common/Media", mediaRoot)
         marker.writeText(resourceVersion)
-        Log.i(TAG, "Installed Legacy base resources into ${destination.absolutePath}")
+        Log.i(TAG, "Installed complete Legacy resources into ${filesDir.absolutePath}")
     }
 
     private fun copyAssetTree(assetPath: String, destination: File) {
