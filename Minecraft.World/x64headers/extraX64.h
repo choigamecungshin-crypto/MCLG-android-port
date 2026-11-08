@@ -86,7 +86,9 @@ typedef struct _XUIDC* HXUIDC;
 
 bool IsEqualXUID(PlayerUID a, PlayerUID b);
 
-using namespace std;
+using std::vector;
+using std::string;
+using std::function;
 
 // Temporary implementation of lock free stack with quite a bit more locking than you might expect
 template <typename T> class XLockFreeStack
