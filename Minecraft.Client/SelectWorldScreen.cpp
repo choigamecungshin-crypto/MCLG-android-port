@@ -189,47 +189,7 @@ void SelectWorldScreen::render(int xm, int ym, float a)
 
     Screen::render(xm, ym, a);
 
-	// 4J - debug code - remove
-	static int count = 0;
-	static bool forceCreateLevel = false;
-	if( count++ >= 100 )
-	{
-		if( !forceCreateLevel && levelList->size() > 0 )
-		{
-			// 4J Stu - For some obscures reason the "delete" button is called "renameButton" and vice versa.
-			//if( levelList->size() > 2 && deleteButton->active )
-			//{
-			//	this->selectedWorld = 2;
-			//	count = 0;
-			//	buttonClicked(deleteButton);
-			//}
-			//else
-			if( levelList->size() > 1 && renameButton->active )
-			{
-				this->selectedWorld = 1;
-				count = 0;
-				buttonClicked(renameButton);
-			}
-			else
-				if( selectButton->active == true )
-			{
-				this->selectedWorld = 0;
-				buttonClicked(selectButton);
-				//this->worldSelected( 0 );
-			}
-			else
-			{
-				selectButton->active = true;
-				deleteButton->active = true;
-				renameButton->active = true;
-				count = 0;
-			}
-		}
-		else
-		{
-			minecraft->setScreen(new CreateWorldScreen(this));
-		}
-	}
+
 }
 
 SelectWorldScreen::WorldSelectionList::WorldSelectionList(SelectWorldScreen *sws) : ScrolledSelectionList(sws->minecraft, sws->width, sws->height, 32, sws->height - 64, 36)
