@@ -1,6 +1,8 @@
 #include <jni.h>
 #include <GLES3/gl3.h>
 #include <android/log.h>
+#include <unistd.h>
+#include <cerrno>
 
 #define LOG_TAG "MCLG-Android"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -24,8 +26,26 @@ static bool g_glesReady = false;
 static bool g_gameReady = false;
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_dev_mc_legacy_MainActivity_nativeInit(JNIEnv*, jobject) {
+Java_dev_mc_legacy_MainActivity_nativeInit(JNIEnv* env, jobject, jstring storagePath) {
     g_glesReady = false;
+
+    if (storagePath == nullptr) {
+        LOGE("nativeInit requires the app-private storage path");
+        return JNI_FALSE;
+    }
+    const char* path = env->GetStringUTFChars(storagePath, nullptr);
+    if (path == nullptr) {
+        LOGE("Could not decode app-private storage path");
+        return JNI_FALSE;
+    }
+    const int directoryResult = chdir(path);
+    const int directoryError = errno;
+    env->ReleaseStringUTFChars(storagePath, path);
+    if (directoryResult != 0) {
+        LOGE("Could not set game working directory (errno=%d)", directoryError);
+        return JNI_FALSE;
+    }
+    LOGI("Game working directory: %s", path);
 
     // JNI methods must never issue GL commands before EGL has made a context
     // current on this thread (including after an EGL context recreation).
