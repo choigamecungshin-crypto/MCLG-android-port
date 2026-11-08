@@ -153,41 +153,26 @@ void FileOutputStream::write(byteArray b, unsigned int offset, unsigned int leng
 	if (length > b.length - offset) length = b.length - offset;
 	(void)std::fwrite(&b[offset], 1, length, static_cast<FILE*>(m_fileHandle));
 #else
-	// 4J Stu - We don't want to write any more than the array buffer holds
-	assert( length <= ( b.length - offset ) );
-
+	assert(length <= (b.length - offset));
 	DWORD numberOfBytesWritten;
-
-	BOOL result = WriteFile(
-		m_fileHandle, // handle to file
-		&b[offset], // data buffer
-		length, // number of bytes to write
-		&numberOfBytesWritten, // number of bytes written
-		NULL // overlapped buffer
-		);
-
-	if( result == 0 )
-	{
-		// TODO 4J Stu - Some kind of error handling
+	BOOL result = WriteFile(m_fileHandle, &b[offset], length, &numberOfBytesWritten, NULL);
+	if (result == 0 || numberOfBytesWritten != length) {
+		// TODO 4J Stu - report the storage write failure.
 	}
-	else if( numberOfBytesWritten == 0 || numberOfBytesWritten != length  )
-	{
-		// File pointer is past the end of the file
-	}
+#endif
 }
-//
-//Closes this file output stream and releases any system resources associated with this stream.
-//This file output stream may no longer be used for writing bytes.
-//If this stream has an associated channel then the channel is closed as well.
+
+// Closes the stream and releases its file handle.
 void FileOutputStream::close()
 {
-	BOOL result = CloseHandle( m_fileHandle );
-
-	if( result == 0 )
-	{
-		// TODO 4J Stu - Some kind of error handling
-	}
-
-	// Stop the dtor from trying to close it again
+#if defined(__ANDROID__)
+	if (m_fileHandle == NULL) return;
+	std::fflush(static_cast<FILE*>(m_fileHandle));
+	std::fclose(static_cast<FILE*>(m_fileHandle));
+	m_fileHandle = NULL;
+#else
+	if (m_fileHandle == INVALID_HANDLE_VALUE) return;
+	CloseHandle(m_fileHandle);
 	m_fileHandle = INVALID_HANDLE_VALUE;
+#endif
 }
