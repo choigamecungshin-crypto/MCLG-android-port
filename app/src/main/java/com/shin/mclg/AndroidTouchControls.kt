@@ -17,7 +17,8 @@ class AndroidTouchControls(
     context: Context,
     private val button: (Int, Boolean) -> Unit,
     private val move: (Float, Float) -> Unit,
-    private val look: (Float, Float) -> Unit
+    private val look: (Float, Float) -> Unit,
+    private val tap: (Float, Float, Boolean) -> Unit
 ) : View(context) {
     private enum class Role { STICK, LOOK, BUTTON }
 
@@ -128,11 +129,8 @@ class AndroidTouchControls(
             return
         }
 
-        if (x >= width * 0.43f) {
-            pointers[id] = Pointer(Role.LOOK, x, y)
-        } else {
-            pointers[id] = Pointer(Role.LOOK, x, y)
-        }
+        pointers[id] = Pointer(Role.LOOK, x, y)
+        tap(x, y, true)
     }
 
     private fun movePointer(id: Int, x: Float, y: Float) {
@@ -154,7 +152,10 @@ class AndroidTouchControls(
         val pointer = pointers.remove(id) ?: return
         when (pointer.role) {
             Role.STICK -> move(0f, 0f)
-            Role.LOOK -> look(0f, 0f)
+            Role.LOOK -> {
+                look(0f, 0f)
+                tap(pointer.lastX, pointer.lastY, false)
+            }
             Role.BUTTON -> button(pointer.mask, false)
         }
     }
