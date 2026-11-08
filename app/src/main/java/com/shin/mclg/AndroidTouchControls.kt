@@ -36,7 +36,7 @@ class AndroidTouchControls(
     }
 
     private val buttonJump = 0x00000001
-    private val buttonSneak = 0x00000002
+    private val buttonSneak = 0x00000100
     private val buttonInventory = 0x00000008
     private val buttonStart = 0x00000010
     private val buttonAttack = 0x00400000
