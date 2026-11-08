@@ -12,6 +12,8 @@ struct AndroidPadState {
     std::array<unsigned int, 256> menuMap{};
     unsigned int buttons = 0;
     unsigned int previousButtons = 0;
+    unsigned int pressedButtons = 0;
+    unsigned int releasedButtons = 0;
     float lx = 0.0f;
     float ly = 0.0f;
     float rx = 0.0f;
@@ -42,15 +44,52 @@ void C_4JInput::Initialise(int, unsigned char, unsigned char, unsigned char) {
     std::lock_guard<std::mutex> lock(g_inputMutex);
     for (AndroidPadState& pad : g_pads) {
         pad = AndroidPadState{};
-        for (unsigned int action = 0; action < 24; ++action) {
-            pad.actionMap[action] = (1u << action);
-            pad.menuMap[action] = (1u << action);
+        for (unsigned int action = 0; action < 256; ++action) {
+            pad.actionMap[action] = 0;
+            pad.menuMap[action] = 0;
         }
+
+        // Match the Legacy Edition Xbox controller action table. Android
+        // touch controls emit the same controller bit masks, so the existing
+        // LocalPlayer/Input.cpp path can consume them unchanged.
+        pad.menuMap[ACTION_MENU_A] = _360_JOY_BUTTON_A;
+        pad.menuMap[ACTION_MENU_B] = _360_JOY_BUTTON_B;
+        pad.menuMap[ACTION_MENU_X] = _360_JOY_BUTTON_X;
+        pad.menuMap[ACTION_MENU_Y] = _360_JOY_BUTTON_Y;
+        pad.menuMap[ACTION_MENU_OK] = _360_JOY_BUTTON_A;
+        pad.menuMap[ACTION_MENU_CANCEL] = _360_JOY_BUTTON_B;
+        pad.menuMap[ACTION_MENU_UP] = _360_JOY_BUTTON_DPAD_UP;
+        pad.menuMap[ACTION_MENU_DOWN] = _360_JOY_BUTTON_DPAD_DOWN;
+        pad.menuMap[ACTION_MENU_LEFT] = _360_JOY_BUTTON_DPAD_LEFT;
+        pad.menuMap[ACTION_MENU_RIGHT] = _360_JOY_BUTTON_DPAD_RIGHT;
+        pad.menuMap[ACTION_MENU_PAGEUP] = _360_JOY_BUTTON_LT;
+        pad.menuMap[ACTION_MENU_PAGEDOWN] = _360_JOY_BUTTON_RT;
+        pad.menuMap[ACTION_MENU_RIGHT_SCROLL] = _360_JOY_BUTTON_RB;
+        pad.menuMap[ACTION_MENU_LEFT_SCROLL] = _360_JOY_BUTTON_LB;
+        pad.menuMap[ACTION_MENU_PAUSEMENU] = _360_JOY_BUTTON_START;
+
+        pad.actionMap[MINECRAFT_ACTION_JUMP] = _360_JOY_BUTTON_A;
+        pad.actionMap[MINECRAFT_ACTION_USE] = _360_JOY_BUTTON_LT;
+        pad.actionMap[MINECRAFT_ACTION_ACTION] = _360_JOY_BUTTON_RT;
+        pad.actionMap[MINECRAFT_ACTION_INVENTORY] = _360_JOY_BUTTON_Y;
+        pad.actionMap[MINECRAFT_ACTION_PAUSEMENU] = _360_JOY_BUTTON_START;
+        pad.actionMap[MINECRAFT_ACTION_DROP] = _360_JOY_BUTTON_B;
+        pad.actionMap[MINECRAFT_ACTION_SNEAK_TOGGLE] = _360_JOY_BUTTON_RTHUMB;
+        pad.actionMap[MINECRAFT_ACTION_CRAFTING] = _360_JOY_BUTTON_X;
+        pad.actionMap[MINECRAFT_ACTION_RENDER_THIRD_PERSON] = _360_JOY_BUTTON_LTHUMB;
+        pad.actionMap[MINECRAFT_ACTION_DPAD_LEFT] = _360_JOY_BUTTON_DPAD_LEFT;
+        pad.actionMap[MINECRAFT_ACTION_DPAD_RIGHT] = _360_JOY_BUTTON_DPAD_RIGHT;
+        pad.actionMap[MINECRAFT_ACTION_DPAD_UP] = _360_JOY_BUTTON_DPAD_UP;
+        pad.actionMap[MINECRAFT_ACTION_DPAD_DOWN] = _360_JOY_BUTTON_DPAD_DOWN;
     }
 }
 void C_4JInput::Tick() {
     std::lock_guard<std::mutex> lock(g_inputMutex);
-    for (AndroidPadState& pad : g_pads) pad.previousButtons = pad.buttons;
+    for (AndroidPadState& pad : g_pads) {
+        pad.pressedButtons = pad.buttons & ~pad.previousButtons;
+        pad.releasedButtons = pad.previousButtons & ~pad.buttons;
+        pad.previousButtons = pad.buttons;
+    }
 }
 void C_4JInput::SetDeadzoneAndMovementRange(unsigned int, unsigned int) {}
 void C_4JInput::SetGameJoypadMaps(unsigned char map, unsigned char action, unsigned int value) {
@@ -86,13 +125,13 @@ bool C_4JInput::ButtonPressed(int index, unsigned char action) {
     std::lock_guard<std::mutex> lock(g_inputMutex);
     const AndroidPadState& pad = padFor(index);
     const unsigned int mask = action == 255 ? pad.buttons : pad.actionMap[action];
-    return (pad.buttons & mask & ~pad.previousButtons) != 0;
+    return (pad.pressedButtons & mask) != 0;
 }
 bool C_4JInput::ButtonReleased(int index, unsigned char action) {
     std::lock_guard<std::mutex> lock(g_inputMutex);
     const AndroidPadState& pad = padFor(index);
     const unsigned int mask = pad.actionMap[action];
-    return (pad.previousButtons & mask & ~pad.buttons) != 0;
+    return (pad.releasedButtons & mask) != 0;
 }
 bool C_4JInput::ButtonDown(int index, unsigned char action) {
     std::lock_guard<std::mutex> lock(g_inputMutex);
