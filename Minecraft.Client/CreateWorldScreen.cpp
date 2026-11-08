@@ -69,11 +69,25 @@ wstring CreateWorldScreen::findAvailableFolderName(LevelStorageSource *levelSour
 {
 	wstring folder2 = folder;	// 4J - copy input as it is const
 
+#if defined(__ANDROID__)
+    // Android saves are persisted by C4JStorage as one .mcs file per world.
+    // Never reuse an existing save ID when the player creates another world.
+    int suffix = 1;
+    for (;;)
+    {
+        StorageManager.SetSaveTitle(folder2.c_str());
+        bool exists = false;
+        StorageManager.DoesSaveExist(&exists);
+        if (!exists) break;
+        folder2 = folder + L"-" + _toString<int>(suffix++);
+    }
+#else
 #if 0
     while (levelSource->getDataTagFor(folder2) != NULL)
-	{
+    {
         folder2 = folder2 + L"-";
     }
+#endif
 #endif
     return folder2;
 }
