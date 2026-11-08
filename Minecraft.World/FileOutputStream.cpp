@@ -1,6 +1,9 @@
 #include "stdafx.h"
 #include "File.h"
 #include "FileOutputStream.h"
+#if defined(__ANDROID__)
+#include <cstdio>
+#endif
 
 //Creates a file output stream to write to the file represented by the specified File object. A new FileDescriptor object is
 //created to represent this file connection.
@@ -11,7 +14,12 @@
 //
 //Parameters:
 //file - the file to be opened for writing.
-FileOutputStream::FileOutputStream(const File &file) : m_fileHandle( INVALID_HANDLE_VALUE )
+FileOutputStream::FileOutputStream(const File &file)
+#if defined(__ANDROID__)
+	: m_fileHandle(NULL)
+#else
+	: m_fileHandle(INVALID_HANDLE_VALUE)
+#endif
 {
 	if( file.exists() && file.isDirectory())
 	{
@@ -19,7 +27,9 @@ FileOutputStream::FileOutputStream(const File &file) : m_fileHandle( INVALID_HAN
 		return;
 	}
 
-#ifdef _DURANGO
+#if defined(__ANDROID__)
+	m_fileHandle = static_cast<HANDLE>(std::fopen(wstringtofilename(file.getPath()), "wb"));
+#elif defined(_DURANGO)
 	m_fileHandle = CreateFile(
 		file.getPath().c_str() , // file name
 		GENERIC_WRITE, // access mode
@@ -41,24 +51,43 @@ FileOutputStream::FileOutputStream(const File &file) : m_fileHandle( INVALID_HAN
 		);
 #endif
 
-	if( m_fileHandle == INVALID_HANDLE_VALUE )
+	if (
+#if defined(__ANDROID__)
+		m_fileHandle == NULL
+#else
+		m_fileHandle == INVALID_HANDLE_VALUE
+#endif
+	)
 	{
+#if defined(__ANDROID__)
+		app.DebugPrintf("Android FileOutputStream: could not open %s\\n", wstringtofilename(file.getPath()));
+#else
 		DWORD error = GetLastError();
+#endif
 		// TODO 4J Stu - Any form of error/exception handling
 	}
 }
 
 FileOutputStream::~FileOutputStream()
 {
+#if defined(__ANDROID__)
+	if (m_fileHandle != NULL) std::fclose(static_cast<FILE*>(m_fileHandle));
+#else
 	if( m_fileHandle != INVALID_HANDLE_VALUE )
 		CloseHandle( m_fileHandle );
+#endif
 }
 
 //Writes the specified byte to this file output stream. Implements the write method of OutputStream.
 //Parameters:
 //b - the byte to be written.
 void FileOutputStream::write(unsigned int b)
-{	
+{
+#if defined(__ANDROID__)
+	if (m_fileHandle == NULL) return;
+	const unsigned char value = static_cast<unsigned char>(b);
+	(void)std::fwrite(&value, 1, 1, static_cast<FILE*>(m_fileHandle));
+#else
 	DWORD numberOfBytesWritten;
 
 	byte value = (byte) b;
@@ -79,6 +108,7 @@ void FileOutputStream::write(unsigned int b)
 	{
 		// File pointer is past the end of the file
 	}
+#endif
 }
 
 //Writes b.length bytes from the specified byte array to this file output stream.
@@ -86,6 +116,10 @@ void FileOutputStream::write(unsigned int b)
 //b - the data.
 void FileOutputStream::write(byteArray b)
 {
+#if defined(__ANDROID__)
+	if (m_fileHandle == NULL || b.data == NULL || b.length == 0) return;
+	(void)std::fwrite(b.data, 1, b.length, static_cast<FILE*>(m_fileHandle));
+#else
 	DWORD numberOfBytesWritten;
 
 	BOOL result = WriteFile(
@@ -104,6 +138,7 @@ void FileOutputStream::write(byteArray b)
 	{
 		// File pointer is past the end of the file
 	}
+#endif
 }
 
 //Writes len bytes from the specified byte array starting at offset off to this file output stream.
@@ -113,6 +148,11 @@ void FileOutputStream::write(byteArray b)
 //len - the number of bytes to write.
 void FileOutputStream::write(byteArray b, unsigned int offset, unsigned int length)
 {
+#if defined(__ANDROID__)
+	if (m_fileHandle == NULL || b.data == NULL || offset > b.length || length == 0) return;
+	if (length > b.length - offset) length = b.length - offset;
+	(void)std::fwrite(&b[offset], 1, length, static_cast<FILE*>(m_fileHandle));
+#else
 	// 4J Stu - We don't want to write any more than the array buffer holds
 	assert( length <= ( b.length - offset ) );
 
