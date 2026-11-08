@@ -54,6 +54,38 @@ using WPARAM = std::uintptr_t;
 using LPARAM = std::intptr_t;
 using LRESULT = std::intptr_t;
 
+// D3D11 handles are kept opaque at the legacy API boundary. The Android
+// renderer implements the C4JRender contract on GLES and never dereferences
+// these Direct3D objects.
+struct ID3D11Device;
+struct IDXGISwapChain;
+struct ID3D11Buffer;
+struct ID3D11ShaderResourceView;
+struct D3D11_RECT { LONG left, top, right, bottom; };
+
+enum {
+    D3D11_BLEND_ZERO = 1,
+    D3D11_BLEND_ONE = 2,
+    D3D11_BLEND_SRC_COLOR = 3,
+    D3D11_BLEND_INV_SRC_COLOR = 4,
+    D3D11_BLEND_SRC_ALPHA = 5,
+    D3D11_BLEND_INV_SRC_ALPHA = 6,
+    D3D11_BLEND_DEST_ALPHA = 7,
+    D3D11_BLEND_INV_DEST_ALPHA = 8,
+    D3D11_BLEND_DEST_COLOR = 9,
+    D3D11_BLEND_INV_DEST_COLOR = 10,
+    D3D11_BLEND_BLEND_FACTOR = 14,
+    D3D11_BLEND_INV_BLEND_FACTOR = 15,
+    D3D11_COMPARISON_NEVER = 1,
+    D3D11_COMPARISON_LESS = 2,
+    D3D11_COMPARISON_EQUAL = 3,
+    D3D11_COMPARISON_LESS_EQUAL = 4,
+    D3D11_COMPARISON_GREATER = 5,
+    D3D11_COMPARISON_NOT_EQUAL = 6,
+    D3D11_COMPARISON_GREATER_EQUAL = 7,
+    D3D11_COMPARISON_ALWAYS = 8
+};
+
 #ifndef TRUE
 #define TRUE 1
 #endif
