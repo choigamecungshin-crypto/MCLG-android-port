@@ -25,8 +25,10 @@
 #endif 
 
 // take out Orbis until they are done
-#if defined _XBOX 
+#if defined _XBOX || defined(__ANDROID__)
 
+// Android does not ship the console Miles/XACT runtime. Keep the Legacy
+// sound interface callable while an Android-native mixer is added.
 SoundEngine::SoundEngine() {}
 void SoundEngine::init(Options *pOptions)
 {
@@ -44,6 +46,7 @@ void SoundEngine::playStreaming(const wstring& name, float x, float y , float z,
 void SoundEngine::playUI(int iSound, float volume, float pitch) {}
 
 void SoundEngine::updateMusicVolume(float fVal) {}
+void SoundEngine::updateSystemMusicPlaying(bool isPlaying) {}
 void SoundEngine::updateSoundEffectVolume(float fVal) {}
 
 void SoundEngine::add(const wstring& name, File *file) {}
@@ -52,6 +55,14 @@ void SoundEngine::addStreaming(const wstring& name, File *file) {}
 char *SoundEngine::ConvertSoundPathToName(const wstring& name, bool bConvertSpaces) { return NULL; }
 bool SoundEngine::isStreamingWavebankReady() { return true; }
 void SoundEngine::playMusicTick() {};
+int SoundEngine::getMusicID(int) { return -1; }
+int SoundEngine::getMusicID(const wstring&) { return -1; }
+void SoundEngine::SetStreamingSounds(int, int, int, int, int, int, int) {}
+void SoundEngine::updateMiles() {}
+void SoundEngine::playMusicUpdate() {}
+#ifdef _DEBUG
+void SoundEngine::GetSoundName(char* name, int) { if (name) name[0] = '\\0'; }
+#endif
 
 #else
 
