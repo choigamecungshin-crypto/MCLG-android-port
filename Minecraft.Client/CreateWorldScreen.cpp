@@ -1,5 +1,9 @@
 #include "stdafx.h"
 #include "CreateWorldScreen.h"
+
+#if defined(__ANDROID__)
+extern "C" bool MclgAndroidStartWorld(const wchar_t* worldName, __int64 seed);
+#endif
 #include "EditBox.h"
 #include "Button.h"
 #include "SurvivalMode.h"
@@ -116,7 +120,14 @@ void CreateWorldScreen::buttonClicked(Button *button)
         }
 
 // 4J Stu - This screen is not used, so removing this to stop the build failing
-#if 0
+#if defined(__ANDROID__)
+        if (!MclgAndroidStartWorld(nameEdit->getValue().c_str(), seedValue))
+        {
+            done = false;
+            minecraft->setScreen(this);
+            return;
+        }
+#elif 0
         minecraft->gameMode = new SurvivalMode(minecraft);
         minecraft->selectLevel(resultFolder, nameEdit->getValue(), seedValue);
         minecraft->setScreen(NULL);
