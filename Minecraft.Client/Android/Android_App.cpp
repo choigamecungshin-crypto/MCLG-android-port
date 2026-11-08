@@ -36,6 +36,12 @@ extern "C" bool MclgAndroidGameInitialize()
     {
         // Match the original console bootstrap: install worker-local pools
         // and the offline network adapter before the Minecraft singleton starts.
+        // Mark the build as the full, offline single-player edition before
+        // Minecraft::main() initializes Options, title screens and world lists.
+        ProfileManager.SetDebugFullOverride(true);
+        ProfileManager.SetPrimaryPad(0);
+        ProfileManager.SetLockedProfile(0);
+
         if (!g_androidNetworkStarted) {
             g_NetworkManager.Initialise();
             g_androidNetworkStarted = true;
@@ -59,9 +65,6 @@ extern "C" bool MclgAndroidGameInitialize()
             return false;
         }
 
-        ProfileManager.SetDebugFullOverride(true);
-        ProfileManager.SetPrimaryPad(0);
-        ProfileManager.SetLockedProfile(0);
         app.InitGameSettings();
         app.InitialiseTips();
         if (game->user != NULL) game->user->name = L"Player";
