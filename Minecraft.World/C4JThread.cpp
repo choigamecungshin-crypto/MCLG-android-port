@@ -1243,6 +1243,43 @@ int C4JThread::EventQueue::threadFunc( void* lpParam )
 
 void C4JThread::EventQueue::threadPoll()
 {
+#if defined(__ANDROID__)
+	// Android does not ship the console ShutdownManager. EventQueue workers
+	// live for the process lifetime; GLSurfaceView and the app lifecycle stop
+	// submitting work before the process exits.
+	if(m_threadInitFunc)
+		m_threadInitFunc();
+
+	for(;;)
+	{
+		DWORD err = m_startEvent->WaitForAny(INFINITE);
+		if(err != WAIT_OBJECT_0)
+			continue;
+
+		bool bListEmpty = true;
+		do
+		{
+			EnterCriticalSection(&m_critSect);
+			if(m_queue.empty())
+			{
+				LeaveCriticalSection(&m_critSect);
+				break;
+			}
+			void* updateParam = m_queue.front();
+			LeaveCriticalSection(&m_critSect);
+
+			m_updateFunc(updateParam);
+
+			EnterCriticalSection(&m_critSect);
+			if(!m_queue.empty())
+				m_queue.pop();
+			bListEmpty = m_queue.empty();
+			if(bListEmpty)
+				m_finishedEvent->Set();
+			LeaveCriticalSection(&m_critSect);
+		} while(!bListEmpty);
+	}
+#else
 	ShutdownManager::HasStarted(ShutdownManager::eEventQueueThreads, m_startEvent);
 
 	if(m_threadInitFunc)
@@ -1250,12 +1287,11 @@ void C4JThread::EventQueue::threadPoll()
 
 	while(ShutdownManager::ShouldRun(ShutdownManager::eEventQueueThreads))
 	{
-
 		DWORD err = m_startEvent->WaitForAny(INFINITE);
 		if(err == WAIT_OBJECT_0)
 		{
 			bool bListEmpty = true;
-			do 
+			do
 			{
 				EnterCriticalSection(&m_critSect);
 				void* updateParam = m_queue.front();
@@ -1267,17 +1303,16 @@ void C4JThread::EventQueue::threadPoll()
 				m_queue.pop();
 				bListEmpty = m_queue.empty();
 				if(bListEmpty)
-				{
 					m_finishedEvent->Set();
-				}
 				LeaveCriticalSection(&m_critSect);
-
 			} while(!bListEmpty);
 		}
 	};
 
 	ShutdownManager::HasFinished(ShutdownManager::eEventQueueThreads);
+#endif
 }
+
 
 
 #ifdef __ORBIS__
