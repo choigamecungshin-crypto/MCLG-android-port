@@ -369,6 +369,11 @@ C4JStorage::ESaveGameState C4JStorage::LoadSaveData(
     const bool readOk = readBytes(savePath(filename), bytes);
     if (readOk) {
         g_saveFilename = filename;
+        g_saveTitle.clear();
+        if (info != nullptr) {
+            for (const char* p = info->UTF8SaveTitle; *p; ++p)
+                g_saveTitle.push_back(static_cast<unsigned char>(*p));
+        }
         g_saveSize = static_cast<unsigned int>(bytes.size());
         void* replacement = bytes.empty() ? nullptr : std::malloc(bytes.size());
         if (!bytes.empty() && replacement == nullptr) {
