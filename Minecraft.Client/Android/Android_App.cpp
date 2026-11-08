@@ -21,9 +21,61 @@ namespace {
 bool g_androidGameStarted = false;
 bool g_androidNetworkStarted = false;
 bool g_androidWorldStarting = false;
-struct AndroidTouchEvent { float x; float y; int pressed; };
+
+enum AndroidInputEventType { ANDROID_INPUT_TOUCH, ANDROID_INPUT_MOUSE, ANDROID_INPUT_KEY };
+struct AndroidInputEvent {
+    AndroidInputEventType type;
+    float x;
+    float y;
+    int keyCode;
+    int unicode;
+    int button;
+    int pressed;
+};
 std::mutex g_androidTouchMutex;
-std::deque<AndroidTouchEvent> g_androidTouchQueue;
+std::deque<AndroidInputEvent> g_androidTouchQueue;
+
+unsigned int androidButtonMask(int keyCode)
+{
+    switch (keyCode)
+    {
+        case 62:  // Space
+        case 96:  // Gamepad A
+            return 0x00000001;
+        case 45:  // Q
+        case 97:  // Gamepad B
+            return 0x00000002;
+        case 99:  // Gamepad X
+            return 0x00000004;
+        case 33:  // E
+        case 100: // Gamepad Y
+            return 0x00000008;
+        case 4:   // Android Back
+        case 111: // Escape
+        case 108: // Gamepad Start
+            return 0x00000010;
+        case 109: // Gamepad Select
+            return 0x00000020;
+        case 103: // R1
+            return 0x00000040;
+        case 102: // L1
+            return 0x00000080;
+        case 59:  // Left Shift
+        case 60:  // Right Shift
+        case 107: // Right stick
+            return 0x00000100;
+        case 135: // F5
+        case 106: // Left stick
+            return 0x00000200;
+        case 19: return 0x00000400; // D-pad up
+        case 20: return 0x00000800; // D-pad down
+        case 21: return 0x00001000; // D-pad left
+        case 22: return 0x00002000; // D-pad right
+        case 105: return 0x00400000; // R2
+        case 104: return 0x00800000; // L2
+        default: return 0;
+    }
+}
 }
 
 extern "C" bool MclgAndroidGameInitialize()
@@ -86,20 +138,43 @@ extern "C" void MclgAndroidGameFrame()
     if (!g_androidGameStarted || game == NULL || !game->running)
         return;
 
-    // GLSurfaceView owns all game state. Android UI only enqueues touch events.
-    std::deque<AndroidTouchEvent> pendingTouches;
+    // All UI events are consumed on the GL thread so screen state and game state
+    // never race the Android input thread.
+    std::deque<AndroidInputEvent> pendingEvents;
     {
         std::lock_guard<std::mutex> lock(g_androidTouchMutex);
-        pendingTouches.swap(g_androidTouchQueue);
+        pendingEvents.swap(g_androidTouchQueue);
     }
-    for (const AndroidTouchEvent& event : pendingTouches) {
+    for (const AndroidInputEvent& event : pendingEvents) {
         Screen* screen = game->screen;
-        if (screen == NULL || screen->width <= 0 || screen->height <= 0)
-            continue;
-        const int x = static_cast<int>(event.x * screen->width);
-        const int y = screen->height - static_cast<int>(event.y * screen->height) - 1;
-        screen->handleAndroidTouch(x, y, event.pressed != 0);
+        if (event.type == ANDROID_INPUT_TOUCH) {
+            if (screen == NULL || screen->width <= 0 || screen->height <= 0) continue;
+            const int x = static_cast<int>(event.x * screen->width);
+            const int y = static_cast<int>(event.y * screen->height);
+            screen->handleAndroidTouch(x, y, event.pressed != 0);
+        } else if (event.type == ANDROID_INPUT_MOUSE) {
+            if (screen != NULL && screen->width > 0 && screen->height > 0) {
+                const int x = static_cast<int>(event.x * screen->width);
+                const int y = static_cast<int>(event.y * screen->height);
+                screen->handleAndroidMouse(x, y, event.button, event.pressed != 0);
+            } else {
+                const unsigned int mask = event.button == 0 ? 0x00400000 :
+                                          event.button == 1 ? 0x00800000 :
+                                          event.button == 2 ? 0x00000020 : 0;
+                if (mask != 0) MclgAndroidInputButton(mask, event.pressed);
+            }
+        } else if (event.type == ANDROID_INPUT_KEY) {
+            if (screen != NULL) {
+                screen->handleAndroidKey(event.keyCode, event.unicode, event.pressed != 0);
+            } else {
+                const unsigned int mask = androidButtonMask(event.keyCode);
+                if (mask != 0) MclgAndroidInputButton(mask, event.pressed);
+            }
+        }
     }
+
+    if (g_androidWorldStarting && game->level != NULL)
+        g_androidWorldStarting = false;
 
     game->run_middle();
 }
@@ -224,8 +299,21 @@ extern "C" bool MclgAndroidStartWorld(const wchar_t* worldName, __int64 seed)
 
 extern "C" void MclgAndroidInputTouch(float x, float y, int pressed)
 {
-    if (!g_androidGameStarted)
-        return;
+    if (!g_androidGameStarted) return;
     std::lock_guard<std::mutex> lock(g_androidTouchMutex);
-    g_androidTouchQueue.push_back(AndroidTouchEvent{x, y, pressed});
+    g_androidTouchQueue.push_back(AndroidInputEvent{ANDROID_INPUT_TOUCH, x, y, 0, 0, 0, pressed});
+}
+
+extern "C" void MclgAndroidInputMouse(float x, float y, int button, int pressed)
+{
+    if (!g_androidGameStarted) return;
+    std::lock_guard<std::mutex> lock(g_androidTouchMutex);
+    g_androidTouchQueue.push_back(AndroidInputEvent{ANDROID_INPUT_MOUSE, x, y, 0, 0, button, pressed});
+}
+
+extern "C" void MclgAndroidInputKey(int keyCode, int unicode, int pressed)
+{
+    if (!g_androidGameStarted) return;
+    std::lock_guard<std::mutex> lock(g_androidTouchMutex);
+    g_androidTouchQueue.push_back(AndroidInputEvent{ANDROID_INPUT_KEY, 0.0f, 0.0f, keyCode, unicode, 0, pressed});
 }
