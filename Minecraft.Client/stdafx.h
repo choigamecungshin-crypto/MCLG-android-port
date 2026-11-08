@@ -9,9 +9,6 @@
 #include "..\\Minecraft.World\\AndroidCompat.h"
 #endif
 
-#if defined(__ANDROID__) && !defined(_WIN32)
-#include "..\\Minecraft.World\\AndroidCompat.h"
-#endif
 
 //#include <xtl.h>
 //#include <xboxmath.h>
@@ -56,18 +53,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#elif defined(__ANDROID__)
-	#include "Android\Android_App.h"
-	#include "Windows64Media\strings.h"
-	#include "Windows64\Sentient\MinecraftTelemetry.h"
-	#include "Windows64\Sentient\SentientTelemetryCommon.h"
-	#include "Windows64\Sentient\TelemetryEnum.h"
-	#include "Windows64\Sentient\DynamicConfigurations.h"
-	#include "Windows64\GameConfig\Minecraft.spa.h"
-	#include "Common\Audio\SoundEngine.h"
-	#include "Windows64\Iggy\include\iggy.h"
-	#include "Windows64\Iggy\gdraw\gdraw_d3d11.h"
-	#include "Windows64\Windows64_UIController.h"
 #elif defined __PSVITA__
 #include <stdio.h>
 #include <stdlib.h>
@@ -301,6 +286,18 @@ typedef XUID GameSessionUID;
 	#include "Windows64\GameConfig\Minecraft.spa.h"
 	#include "Windows64\XML\ATGXmlParser.h"	
 	#include "Windows64\Social\SocialManager.h"
+	#include "Common\Audio\SoundEngine.h"
+	#include "Windows64\Iggy\include\iggy.h"
+	#include "Windows64\Iggy\gdraw\gdraw_d3d11.h"
+	#include "Windows64\Windows64_UIController.h"
+#elif defined(__ANDROID__)
+	#include "Android\Android_App.h"
+	#include "Windows64Media\strings.h"
+	#include "Windows64\Sentient\MinecraftTelemetry.h"
+	#include "Windows64\Sentient\SentientTelemetryCommon.h"
+	#include "Windows64\Sentient\TelemetryEnum.h"
+	#include "Windows64\Sentient\DynamicConfigurations.h"
+	#include "Windows64\GameConfig\Minecraft.spa.h"
 	#include "Common\Audio\SoundEngine.h"
 	#include "Windows64\Iggy\include\iggy.h"
 	#include "Windows64\Iggy\gdraw\gdraw_d3d11.h"
