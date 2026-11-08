@@ -96,6 +96,8 @@ InputStream *DefaultTexturePack::getResourceImplementation(const wstring &name)/
 	wDrive = wstr + L"Common\\res\\TitleUpdate\\res";
 	*/
 	wDrive = L"Common\\res\\TitleUpdate\\res";
+#elif defined(__ANDROID__)
+	wDrive = L"Common/res/TitleUpdate/res/";
 #else
 	wDrive = L"Common\\res\\TitleUpdate\\res";
 
