@@ -9,7 +9,7 @@ BiomeOverrideLayer::BiomeOverrideLayer(int seedMixup) : Layer(seedMixup)
 {
 	m_biomeOverride = byteArray( width * height );
 
-#if defined(__ANDROID__)
+#if defined(ANDROID) || defined(__ANDROID__) || defined(MCLG_ANDROID)
 	// Legacy console editions load this optional map from a console title
 	// storage path. Android worlds do not ship that file; keep the original
 	// vanilla fallback biome until the Android world-rules file is provided.
