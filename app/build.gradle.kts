@@ -54,6 +54,14 @@ kotlin {
     jvmToolchain(17)
 }
 
+// Install the base Legacy texture and font resources into the APK assets.
+// The Android bootstrap copies them into app-private storage before native startup;
+// the original File/InputStream code can then use its normal filesystem paths.
+val copyLegacyGameResources by tasks.registering(Copy::class) {
+    from(rootProject.file("Minecraft.Client/Common/res/TitleUpdate/res"))
+    into(layout.projectDirectory.dir("src/main/assets/Common/res/TitleUpdate/res"))
+}
+
 // Reuse the original Minecraft Legacy artwork as the Android launcher icon.
 val copyMclgLauncherIcon by tasks.registering(Copy::class) {
     from(rootProject.file("Minecraft.Client/Common/Media/Graphics/MinecraftIcon.png"))
@@ -62,5 +70,5 @@ val copyMclgLauncherIcon by tasks.registering(Copy::class) {
 }
 
 tasks.named("preBuild").configure {
-    dependsOn(copyMclgLauncherIcon)
+    dependsOn(copyMclgLauncherIcon, copyLegacyGameResources)
 }
