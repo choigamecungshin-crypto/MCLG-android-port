@@ -9,6 +9,10 @@
 #include "..\Minecraft.World\net.minecraft.world.level.h"
 #include "..\Minecraft.World\net.minecraft.world.level.storage.h"
 
+#if defined(__ANDROID__)
+extern "C" bool MclgAndroidLoadWorld(const wchar_t* worldName);
+#endif
+
 
 SelectWorldScreen::SelectWorldScreen(Screen *lastScreen)
 {
@@ -146,20 +150,27 @@ void SelectWorldScreen::buttonClicked(Button *button)
 
 void SelectWorldScreen::worldSelected(int id)
 {
-    minecraft->setScreen(NULL);
     if (done) return;
     done = true;
-    minecraft->gameMode = NULL; //new SurvivalMode(minecraft);
 
     wstring worldFolderName = getWorldId(id);
-    if (worldFolderName == L"")	// 4J - was NULL comparison
-	{
+    if (worldFolderName == L"")
         worldFolderName = L"World" + _toString<int>(id);
+
+#if defined(__ANDROID__)
+    minecraft->setScreen(NULL);
+    if (!MclgAndroidLoadWorld(worldFolderName.c_str()))
+    {
+        done = false;
+        minecraft->setScreen(this);
     }
-// 4J Stu - Not used, so commenting to stop the build failing
+#else
+    minecraft->setScreen(NULL);
+    minecraft->gameMode = NULL;
 #if 0
     minecraft->selectLevel(worldFolderName, getWorldName(id), 0);
     minecraft->setScreen(NULL);
+#endif
 #endif
 }
 
@@ -170,10 +181,29 @@ void SelectWorldScreen::confirmResult(bool result, int id)
         isDeleting = false;
         if (result)
 		{
+#if defined(__ANDROID__)
+            wstring selectedId = getWorldId(id);
+            SAVE_DETAILS *details = StorageManager.ReturnSavesInfo();
+            if (details != NULL && details->SaveInfoA != NULL)
+            {
+                for (int i = 0; i < details->iSaveC; ++i)
+                {
+                    SAVE_INFO *info = &details->SaveInfoA[i];
+                    wstring candidate;
+                    for (const char *p = info->UTF8SaveFilename; *p; ++p)
+                        candidate.push_back(static_cast<unsigned char>(*p));
+                    if (candidate == selectedId)
+                    {
+                        StorageManager.DeleteSaveData(info, NULL, NULL);
+                        break;
+                    }
+                }
+            }
+#else
             LevelStorageSource *levelSource = minecraft->getLevelSource();
             levelSource->clearAll();
             levelSource->deleteLevel(getWorldId(id));
-
+#endif
             loadLevelList();
         }
         minecraft->setScreen(this);
@@ -208,6 +238,9 @@ void SelectWorldScreen::WorldSelectionList::selectItem(int item, bool doubleClic
     bool active = (this->parent->selectedWorld >= 0 && this->parent->selectedWorld < getNumberOfItems());
     parent->selectButton->active = active;
     parent->deleteButton->active = active;
+#if defined(__ANDROID__)
+    parent->deleteButton->active = false;
+#endif
     parent->renameButton->active = active;
 
     if (doubleClick && active) 
@@ -234,41 +267,36 @@ void SelectWorldScreen::WorldSelectionList::renderBackground()
 void SelectWorldScreen::WorldSelectionList::renderItem(int i, int x, int y, int h, Tesselator *t)
 {
     LevelSummary *levelSummary = parent->levelList->at(i);
-
     wstring name = levelSummary->getLevelName();
-    if (name.length()==0)
-	{
+    if (name.empty())
         name = parent->worldLang + L" " + _toString<int>(i + 1);
-    }
 
+#if defined(__ANDROID__)
     wstring id = levelSummary->getLevelId();
-
-	ULARGE_INTEGER rawtime;
-	rawtime.QuadPart = levelSummary->getLastPlayed() * 10000; // Convert it from milliseconds back to FileTime
-
-	FILETIME timeasfiletime;
-	timeasfiletime.dwHighDateTime = rawtime.HighPart;
-	timeasfiletime.dwLowDateTime = rawtime.LowPart;
-
-	SYSTEMTIME time;
-	FileTimeToSystemTime( &timeasfiletime, &time );
-
-	wchar_t buffer[20];
-	// 4J Stu - Currently shows years as 4 digits, where java only showed 2
-	swprintf(buffer,20,L"%d/%d/%d %d:%02d",time.wDay, time.wMonth, time.wYear, time.wHour, time.wMinute); // 4J - TODO Localise this
-    id = id + L" (" + buffer;
-
+    const __int64 sizeKb = levelSummary->getSizeOnDisk() / 1024;
+    id += L" (" + _toString<__int64>(sizeKb) + L" KB)";
+    parent->drawString(parent->font, name, x + 2, y + 1, 0xffffff);
+    parent->drawString(parent->font, id, x + 2, y + 13, 0x808080);
+#else
+    wstring id = levelSummary->getLevelId();
+    ULARGE_INTEGER rawtime;
+    rawtime.QuadPart = levelSummary->getLastPlayed() * 10000;
+    FILETIME timeasfiletime;
+    timeasfiletime.dwHighDateTime = rawtime.HighPart;
+    timeasfiletime.dwLowDateTime = rawtime.LowPart;
+    SYSTEMTIME time;
+    FileTimeToSystemTime(&timeasfiletime, &time);
+    wchar_t buffer[20];
+    swprintf(buffer, 20, L"%d/%d/%d %d:%02d", time.wDay, time.wMonth,
+             time.wYear, time.wHour, time.wMinute);
+    id += L" (" + wstring(buffer);
     __int64 size = levelSummary->getSizeOnDisk();
-    id = id + L", " + _toString<float>(size / 1024 * 100 / 1024 / 100.0f) + L" MB)";
+    id += L", " + _toString<float>(size / 1024 * 100 / 1024 / 100.0f) + L" MB)";
     wstring info;
-
     if (levelSummary->isRequiresConversion())
-	{
         info = parent->conversionLang + L" " + info;
-    }
-
     parent->drawString(parent->font, name, x + 2, y + 1, 0xffffff);
     parent->drawString(parent->font, id, x + 2, y + 12, 0x808080);
-    parent->drawString(parent->font, info, x + 2, y + 12 + 10, 0x808080);
-
+    parent->drawString(parent->font, info, x + 2, y + 22, 0x808080);
+#endif
 }
