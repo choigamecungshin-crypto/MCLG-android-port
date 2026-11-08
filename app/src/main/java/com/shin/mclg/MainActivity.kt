@@ -31,6 +31,7 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
     private external fun nativeInputButton(mask: Int, pressed: Boolean)
     private external fun nativeInputMove(x: Float, y: Float)
     private external fun nativeInputLook(dx: Float, dy: Float)
+    private external fun nativeInputTouch(x: Float, y: Float, pressed: Boolean)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,7 +72,12 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
                         this@MainActivity,
                         { mask, pressed -> if (nativeReady) nativeInputButton(mask, pressed) },
                         { x, y -> if (nativeReady) nativeInputMove(x, y) },
-                        { dx, dy -> if (nativeReady) nativeInputLook(dx, dy) }
+                        { dx, dy -> if (nativeReady) nativeInputLook(dx, dy) },
+                        { x, y, pressed ->
+                            if (nativeReady && surface.width > 0 && surface.height > 0) {
+                                nativeInputTouch(x / surface.width.toFloat(), y / surface.height.toFloat(), pressed)
+                            }
+                        }
                     ),
                     FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
