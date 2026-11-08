@@ -15,8 +15,7 @@ static int AndroidConditionWait(pthread_cond_t* condition, pthread_mutex_t* mute
 	}
 	struct timespec deadline;
 	clock_gettime(CLOCK_REALTIME, &deadline);
-	if (timeoutMs < 0) timeoutMs = 0;
-	deadline.tv_sec += timeoutMs / 1000;
+		deadline.tv_sec += timeoutMs / 1000;
 	deadline.tv_nsec += static_cast<long>(timeoutMs % 1000) * 1000000L;
 	if (deadline.tv_nsec >= 1000000000L) {
 		++deadline.tv_sec;
@@ -216,15 +215,16 @@ C4JThread::C4JThread( const char* mainThreadName)
 
 C4JThread::~C4JThread()
 {
-#if defined __PS3__ || defined __ORBIS__ || defined __PSVITA__ || defined(__ANDROID__)
-	delete m_completionFlag;
-#endif
-
 #if defined(__ANDROID__)
 	if (m_threadCreated && !pthread_equal(pthread_self(), m_threadID)) {
 		pthread_join(m_threadID, NULL);
 	}
-#elif defined __ORBIS__
+	delete m_completionFlag;
+#elif defined __PS3__ || defined __ORBIS__ || defined __PSVITA__
+	delete m_completionFlag;
+#endif
+
+#if defined __ORBIS__
 	scePthreadJoin(m_threadID, NULL);
 #endif
 
@@ -335,10 +335,14 @@ void C4JThread::Run()
 	pthread_attr_t attributes;
 	pthread_attr_init(&attributes);
 	if (m_stackSize >= PTHREAD_STACK_MIN) pthread_attr_setstacksize(&attributes, static_cast<size_t>(m_stackSize));
+	m_isRunning = true;
+	m_hasStarted = true;
 	int createResult = pthread_create(&m_threadID, &attributes, entryPoint, this);
 	pthread_attr_destroy(&attributes);
 	m_threadCreated = createResult == 0;
 	if (createResult != 0) {
+		m_isRunning = false;
+		m_hasStarted = false;
 		m_exitCode = createResult;
 		m_completionFlag->Set();
 	}
@@ -356,8 +360,6 @@ void C4JThread::SetProcessor( int proc )
 	// does nothing since we only have the 1 processor
 #elif defined __ORBIS__
 	scePthreadAttrSetaffinity(&m_threadAttr, 1 << proc);
-#elif defined(__ANDROID__)
-	(void)proc;
 #elif defined __PSVITA__
 	int Proc = proc >> 1;			// convert from 360's 3 cores * 2 hardware threads to Vita's 3 cores
 	int Mask = SCE_KERNEL_CPU_MASK_USER_0 << Proc;
@@ -367,8 +369,6 @@ void C4JThread::SetProcessor( int proc )
 	app.DebugPrintf("***************************** set thread proc %s %d %d %d **************************\n", m_threadName, proc, Mask, Newmask);
 #elif defined _DURANGO
 	SetThreadAffinityMask(m_threadHandle, 1 << proc );
-#elif defined(__ANDROID__)
-	(void)proc;
 #else
 	XSetThreadProcessor( m_threadHandle, proc);
 #endif
@@ -463,6 +463,8 @@ DWORD C4JThread::WaitForCompletion( int timeoutMs )
 	}*/
 
 //	return m_exitCode;
+#elif defined(__ANDROID__)
+	return m_completionFlag->WaitForSignal(timeoutMs);
 #else
 	return WaitForSingleObject(m_threadHandle, timeoutMs);
 #endif // __PS3__
