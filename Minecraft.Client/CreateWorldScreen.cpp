@@ -24,10 +24,6 @@ void CreateWorldScreen::tick()
 {
     nameEdit->tick();
     seedEdit->tick();
-
-	// 4J - debug code - to be removed
-	static int count = 0;
-	if(count++ == 100 ) buttonClicked(buttons[0]);
 }
 
 void CreateWorldScreen::init()
@@ -121,7 +117,7 @@ void CreateWorldScreen::buttonClicked(Button *button)
 
 // 4J Stu - This screen is not used, so removing this to stop the build failing
 #if defined(__ANDROID__)
-        if (!MclgAndroidStartWorld(nameEdit->getValue().c_str(), seedValue))
+        if (!MclgAndroidStartWorld(resultFolder.c_str(), seedValue))
         {
             done = false;
             minecraft->setScreen(this);
