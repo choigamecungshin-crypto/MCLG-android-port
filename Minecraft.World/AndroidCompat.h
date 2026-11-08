@@ -98,9 +98,13 @@ static inline void Sleep(DWORD milliseconds) {
 // renderer implements the C4JRender contract on GLES and never dereferences
 // these Direct3D objects.
 struct ID3D11Device;
+struct ID3D11DeviceContext;
 struct IDXGISwapChain;
 struct ID3D11Buffer;
 struct ID3D11ShaderResourceView;
+struct ID3D11RenderTargetView;
+struct ID3D11DepthStencilView;
+struct ID3D11Texture2D;
 struct D3D11_RECT { LONG left, top, right, bottom; };
 
 enum {
