@@ -52,7 +52,12 @@ void System::arraycopy(arrayWithLength<int> src, unsigned int srcPos, arrayWithL
 //The current value of the system timer, in nanoseconds.
 __int64 System::nanoTime()
 {
+#ifdef __ANDROID__
+	return static_cast<__int64>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+		std::chrono::steady_clock::now().time_since_epoch()).count());
+#else
 	return GetTickCount() * 1000000LL;
+#endif
 }
 
 //Returns the current time in milliseconds. Note that while the unit of time of the return value is a millisecond,
@@ -83,6 +88,9 @@ __int64 System::currentTimeMillis()
 #elif defined __PSVITA__
 	// AP - TRC states we can't use the RTC for measuring elapsed game time
 	return sceKernelGetProcessTimeWide() / 1000;
+#elif defined(__ANDROID__)
+	return static_cast<__int64>(std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::system_clock::now().time_since_epoch()).count());
 /*	SceDateTime Time;
 	sceRtcGetCurrentClockLocalTime(&Time);
 	__int64 systTime = (((((((Time.day * 24) + Time.hour) * 60) + Time.minute) * 60) + Time.second) * 1000) + (Time.microsecond / 1000);
