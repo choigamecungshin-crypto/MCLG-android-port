@@ -23,6 +23,10 @@
 #define FALSE 0
 #endif
 
+#ifndef __debugbreak
+#define __debugbreak() __builtin_trap()
+#endif
+
 #ifndef WINAPI
 #define WINAPI
 #endif
