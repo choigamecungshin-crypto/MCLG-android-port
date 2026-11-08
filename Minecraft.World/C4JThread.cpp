@@ -192,11 +192,15 @@ C4JThread::C4JThread( const char* mainThreadName)
 
 C4JThread::~C4JThread()
 {
-#if defined __PS3__ || defined __ORBIS__ || defined __PSVITA__
+#if defined __PS3__ || defined __ORBIS__ || defined __PSVITA__ || defined(__ANDROID__)
 	delete m_completionFlag;
 #endif
 
-#if defined __ORBIS__
+#if defined(__ANDROID__)
+	if (m_threadCreated && !pthread_equal(pthread_self(), m_threadID)) {
+		pthread_join(m_threadID, NULL);
+	}
+#elif defined __ORBIS__
 	scePthreadJoin(m_threadID, NULL);
 #endif
 
