@@ -10,7 +10,7 @@
 namespace {
 static int AndroidConditionWait(pthread_cond_t* condition, pthread_mutex_t* mutex, int timeoutMs)
 {
-	if (timeoutMs == static_cast<int>(INFINITE)) {
+	if (timeoutMs < 0) {
 		return pthread_cond_wait(condition, mutex);
 	}
 	struct timespec deadline;
@@ -746,6 +746,10 @@ C4JThread::EventArray::EventArray( int size, EMode mode/* = e_modeAutoClear*/)
 #elif defined __PSVITA__
 	char name[1] = {0};
 	m_events = sceKernelCreateEventFlag( name, SCE_KERNEL_EVF_ATTR_TH_FIFO | SCE_KERNEL_EVF_ATTR_MULTI, 0, NULL);
+#elif defined(__ANDROID__)
+	m_signalMask = 0;
+	pthread_mutex_init(&m_mutex, NULL);
+	pthread_cond_init(&m_condition, NULL);
 #else
 	m_events = new HANDLE[size];
 	for(int i=0;i<size;i++)
@@ -755,6 +759,16 @@ C4JThread::EventArray::EventArray( int size, EMode mode/* = e_modeAutoClear*/)
 #endif // __PS3__
 }
 
+C4JThread::EventArray::~EventArray()
+{
+#if defined(__ANDROID__)
+	pthread_cond_destroy(&m_condition);
+	pthread_mutex_destroy(&m_mutex);
+#elif !defined(__PS3__) && !defined(__ORBIS__) && !defined(__PSVITA__)
+	for (int i = 0; i < m_size; ++i) CloseHandle(m_events[i]);
+	delete[] m_events;
+#endif
+}
 
 void C4JThread::EventArray::Set(int index)
 {
@@ -765,6 +779,12 @@ void C4JThread::EventArray::Set(int index)
 	sceKernelSetEventFlag(m_events, 1<<index);
 #elif defined __PSVITA__
 	sceKernelSetEventFlag(m_events, 1<<index);
+#elif defined(__ANDROID__)
+	if (index < 0 || index >= m_size) return;
+	pthread_mutex_lock(&m_mutex);
+	m_signalMask |= (1u << index);
+	pthread_cond_broadcast(&m_condition);
+	pthread_mutex_unlock(&m_mutex);
 #else
 	SetEvent(m_events[index]);
 #endif //__PS3__
@@ -779,6 +799,11 @@ void C4JThread::EventArray::Clear(int index)
 	sceKernelClearEventFlag(m_events, ~(1<<index));
 #elif defined __PSVITA__
 	sceKernelClearEventFlag(m_events, ~(1<<index));
+#elif defined(__ANDROID__)
+	if (index < 0 || index >= m_size) return;
+	pthread_mutex_lock(&m_mutex);
+	m_signalMask &= ~(1u << index);
+	pthread_mutex_unlock(&m_mutex);
 #else
 	ResetEvent(m_events[index]);
 #endif //__PS3__
@@ -887,6 +912,24 @@ DWORD C4JThread::EventArray::WaitForSingle(int index, int timeoutMs )
 		case SCE_KERNEL_ERROR_WAIT_CANCEL: return WAIT_ABANDONED;
 		default: return WAIT_FAILED;
 	}
+#elif defined(__ANDROID__)
+	if (index < 0 || index >= m_size) return WAIT_FAILED;
+	pthread_mutex_lock(&m_mutex);
+	const unsigned int bit = 1u << index;
+	while ((m_signalMask & bit) == 0) {
+		const int result = AndroidConditionWait(&m_condition, &m_mutex, timeoutMs);
+		if (result == ETIMEDOUT) {
+			pthread_mutex_unlock(&m_mutex);
+			return WAIT_TIMEOUT;
+		}
+		if (result != 0) {
+			pthread_mutex_unlock(&m_mutex);
+			return WAIT_FAILED;
+		}
+	}
+	if (m_mode == e_modeAutoClear) m_signalMask &= ~bit;
+	pthread_mutex_unlock(&m_mutex);
+	retVal = WAIT_OBJECT_0;
 #else
 	retVal = WaitForSingleObject(m_events[index], timeoutMs);
 #endif // __PS3__
@@ -992,6 +1035,24 @@ DWORD C4JThread::EventArray::WaitForAll(int timeoutMs )
 		case SCE_KERNEL_ERROR_WAIT_CANCEL: return WAIT_ABANDONED;
 		default: return WAIT_FAILED;
 	}
+#elif defined(__ANDROID__)
+	pthread_mutex_lock(&m_mutex);
+	unsigned int requiredMask = 0;
+	for (int i = 0; i < m_size; ++i) requiredMask |= (1u << i);
+	while ((m_signalMask & requiredMask) != requiredMask) {
+		const int result = AndroidConditionWait(&m_condition, &m_mutex, timeoutMs);
+		if (result == ETIMEDOUT) {
+			pthread_mutex_unlock(&m_mutex);
+			return WAIT_TIMEOUT;
+		}
+		if (result != 0) {
+			pthread_mutex_unlock(&m_mutex);
+			return WAIT_FAILED;
+		}
+	}
+	if (m_mode == e_modeAutoClear) m_signalMask &= ~requiredMask;
+	pthread_mutex_unlock(&m_mutex);
+	retVal = WAIT_OBJECT_0;
 #else
 	retVal = WaitForMultipleObjects(m_size, m_events, true, timeoutMs);
 #endif // __PS3__
@@ -1081,6 +1142,27 @@ DWORD C4JThread::EventArray::WaitForAny(int timeoutMs )
 		case SCE_KERNEL_ERROR_WAIT_CANCEL: return WAIT_ABANDONED;
 		default: return WAIT_FAILED;
 	}
+#elif defined(__ANDROID__)
+	pthread_mutex_lock(&m_mutex);
+	unsigned int validMask = 0;
+	for (int i = 0; i < m_size; ++i) validMask |= (1u << i);
+	while ((m_signalMask & validMask) == 0) {
+		const int result = AndroidConditionWait(&m_condition, &m_mutex, timeoutMs);
+		if (result == ETIMEDOUT) {
+			pthread_mutex_unlock(&m_mutex);
+			return WAIT_TIMEOUT;
+		}
+		if (result != 0) {
+			pthread_mutex_unlock(&m_mutex);
+			return WAIT_FAILED;
+		}
+	}
+	unsigned int readyMask = m_signalMask & validMask;
+	int readyIndex = 0;
+	while ((readyMask & (1u << readyIndex)) == 0) ++readyIndex;
+	if (m_mode == e_modeAutoClear) m_signalMask &= ~(1u << readyIndex);
+	pthread_mutex_unlock(&m_mutex);
+	return WAIT_OBJECT_0 + static_cast<DWORD>(readyIndex);
 #else
 	return WaitForMultipleObjects(m_size, m_events, false, timeoutMs);
 #endif // __PS3__
