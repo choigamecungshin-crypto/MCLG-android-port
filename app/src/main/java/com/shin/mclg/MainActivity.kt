@@ -70,12 +70,20 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
             surface.setOnTouchListener { _, event ->
                 if (event.actionMasked == MotionEvent.ACTION_DOWN) {
                     surface.requestFocus()
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        surface.requestPointerCapture()
-                        pointerCaptured = true
-                    }
+
                 }
                 false
+            }
+            surface.setOnCapturedPointerListener { _, event ->
+                if (nativeReady && event.action == MotionEvent.ACTION_MOVE) {
+                    nativeInputLook(
+                        event.getAxisValue(MotionEvent.AXIS_RELATIVE_X) * 0.012f,
+                        event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y) * 0.012f
+                    )
+                    true
+                } else {
+                    false
+                }
             }
             setContentView(surface)
             Log.i(TAG, "Activity created; hardware keyboard, mouse and gamepad input enabled (no touch overlay)")
@@ -194,18 +202,6 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
             }
         }
         return super.onGenericMotionEvent(event)
-    }
-
-    override fun onCapturedPointerEvent(event: MotionEvent): Boolean {
-        if (handleMouseButtons(event)) return true
-        if (nativeReady && event.action == MotionEvent.ACTION_MOVE) {
-            nativeInputLook(
-                event.getAxisValue(MotionEvent.AXIS_RELATIVE_X) * 0.012f,
-                event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y) * 0.012f
-            )
-            return true
-        }
-        return super.onCapturedPointerEvent(event)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
