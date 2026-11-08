@@ -10,6 +10,9 @@ import android.opengl.GLSurfaceView
 import android.os.Bundle
 import android.util.Log
 import android.view.WindowManager
+import android.view.KeyEvent
+import android.view.MotionEvent
+import android.view.InputDevice
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
@@ -24,6 +27,8 @@ import javax.microedition.khronos.opengles.GL10
 class MainActivity : Activity(), GLSurfaceView.Renderer {
     private lateinit var surface: GLSurfaceView
     @Volatile private var nativeReady = false
+    private val heldKeys = HashSet<Int>()
+    private var pointerCaptured = false
 
     private external fun nativeInit(storagePath: String): Boolean
     private external fun nativeResize(width: Int, height: Int)
@@ -32,6 +37,7 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
     private external fun nativeInputMove(x: Float, y: Float)
     private external fun nativeInputLook(dx: Float, dy: Float)
     private external fun nativeInputTouch(x: Float, y: Float, pressed: Boolean)
+    private external fun nativeInputTrigger(right: Boolean, value: Int)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,41 +65,124 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
                 setRenderer(this@MainActivity)
                 renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
             }
-            val root = FrameLayout(this).apply {
-                addView(
-                    surface,
-                    FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                )
-                addView(
-                    AndroidTouchControls(
-                        this@MainActivity,
-                        { mask, pressed -> if (nativeReady) nativeInputButton(mask, pressed) },
-                        { x, y -> if (nativeReady) nativeInputMove(x, y) },
-                        { dx, dy -> if (nativeReady) nativeInputLook(dx, dy) },
-                        { x, y, pressed ->
-                            if (nativeReady && surface.width > 0 && surface.height > 0) {
-                                nativeInputTouch(x / surface.width.toFloat(), y / surface.height.toFloat(), pressed)
-                            }
-                        }
-                    ),
-                    FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                )
+            surface.isFocusable = true
+            surface.isFocusableInTouchMode = true
+            surface.setOnTouchListener { _, event ->
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    surface.requestFocus()
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        surface.requestPointerCapture()
+                        pointerCaptured = true
+                    }
+                }
+                false
             }
-            setContentView(root)
-            Log.i(TAG, "Activity created; requesting OpenGL ES 3.0 with touch controls")
-        } catch (error: Throwable) {
+            setContentView(surface)
+            Log.i(TAG, "Activity created; hardware keyboard, mouse and gamepad input enabled (no touch overlay)")
+
+            } catch (error: Throwable) {
             recordCrash("Activity/EGL setup", error)
             showStartupError(error)
         }
 
     }
 
+
+
+    private fun buttonMask(keyCode: Int): Int? = when (keyCode) {
+        KeyEvent.KEYCODE_SPACE, KeyEvent.KEYCODE_BUTTON_A -> 0x00000001
+        KeyEvent.KEYCODE_Q, KeyEvent.KEYCODE_BUTTON_B -> 0x00000002
+        KeyEvent.KEYCODE_F, KeyEvent.KEYCODE_BUTTON_X -> 0x00000004
+        KeyEvent.KEYCODE_E, KeyEvent.KEYCODE_BUTTON_Y -> 0x00000008
+        KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_BUTTON_START -> 0x00000010
+        KeyEvent.KEYCODE_TAB, KeyEvent.KEYCODE_BUTTON_SELECT -> 0x00000020
+        KeyEvent.KEYCODE_BUTTON_R1 -> 0x00000040
+        KeyEvent.KEYCODE_BUTTON_L1 -> 0x00000080
+        KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_SHIFT_RIGHT,
+        KeyEvent.KEYCODE_BUTTON_THUMBR -> 0x00000100
+        KeyEvent.KEYCODE_F5, KeyEvent.KEYCODE_BUTTON_THUMBL -> 0x00000200
+        KeyEvent.KEYCODE_DPAD_UP -> 0x00000400
+        KeyEvent.KEYCODE_DPAD_DOWN -> 0x00000800
+        KeyEvent.KEYCODE_DPAD_LEFT -> 0x00001000
+        KeyEvent.KEYCODE_DPAD_RIGHT -> 0x00002000
+        KeyEvent.KEYCODE_BUTTON_R2 -> 0x00400000
+        KeyEvent.KEYCODE_BUTTON_L2 -> 0x00800000
+        else -> null
+    }
+
+    private fun updateKeyboardMovement() {
+        if (!nativeReady) return
+        val x = (if (heldKeys.contains(KeyEvent.KEYCODE_D)) 1f else 0f) -
+                (if (heldKeys.contains(KeyEvent.KEYCODE_A)) 1f else 0f)
+        val y = (if (heldKeys.contains(KeyEvent.KEYCODE_S)) 1f else 0f) -
+                (if (heldKeys.contains(KeyEvent.KEYCODE_W)) 1f else 0f)
+        nativeInputMove(x, y)
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val down = event.action == KeyEvent.ACTION_DOWN
+        val up = event.action == KeyEvent.ACTION_UP
+        if (!down && !up) return super.dispatchKeyEvent(event)
+
+        val code = event.keyCode
+        if (code == KeyEvent.KEYCODE_W || code == KeyEvent.KEYCODE_A ||
+            code == KeyEvent.KEYCODE_S || code == KeyEvent.KEYCODE_D) {
+            if (down) heldKeys.add(code) else heldKeys.remove(code)
+            updateKeyboardMovement()
+            return true
+        }
+
+        val mask = buttonMask(code)
+        if (mask != null && nativeReady) {
+            nativeInputButton(mask, down)
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    override fun onGenericMotionEvent(event: MotionEvent): Boolean {
+        val source = event.source
+        if ((source and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK ||
+            (source and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD) {
+            if (event.action == MotionEvent.ACTION_MOVE && nativeReady) {
+                nativeInputMove(
+                    event.getAxisValue(MotionEvent.AXIS_X),
+                    event.getAxisValue(MotionEvent.AXIS_Y)
+                )
+                nativeInputLook(
+                    event.getAxisValue(MotionEvent.AXIS_RX),
+                    event.getAxisValue(MotionEvent.AXIS_RY)
+                )
+                val leftTrigger = (event.getAxisValue(MotionEvent.AXIS_LTRIGGER) * 255f)
+                    .toInt().coerceIn(0, 255)
+                val rightTrigger = (event.getAxisValue(MotionEvent.AXIS_RTRIGGER) * 255f)
+                    .toInt().coerceIn(0, 255)
+                nativeInputTrigger(false, leftTrigger)
+                nativeInputTrigger(true, rightTrigger)
+                return true
+            }
+        }
+        return super.onGenericMotionEvent(event)
+    }
+
+    override fun onCapturedPointerEvent(event: MotionEvent): Boolean {
+        if (nativeReady && event.action == MotionEvent.ACTION_MOVE) {
+            nativeInputLook(
+                event.getAxisValue(MotionEvent.AXIS_RELATIVE_X) * 0.012f,
+                event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y) * 0.012f
+            )
+            return true
+        }
+        return super.onCapturedPointerEvent(event)
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (!hasFocus && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && pointerCaptured) {
+            surface.releasePointerCapture()
+            pointerCaptured = false
+        }
+    }
 
     private fun installGameResources() {
         val destination = File(filesDir, "Common/res/TitleUpdate/res")
