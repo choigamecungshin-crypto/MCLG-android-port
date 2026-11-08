@@ -28,7 +28,6 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
     private lateinit var surface: GLSurfaceView
     @Volatile private var nativeReady = false
     private val heldKeys = HashSet<Int>()
-    private var pointerCaptured = false
 
     private external fun nativeInit(storagePath: String): Boolean
     private external fun nativeResize(width: Int, height: Int)
@@ -37,6 +36,8 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
     private external fun nativeInputMove(x: Float, y: Float)
     private external fun nativeInputLook(dx: Float, dy: Float)
     private external fun nativeInputTouch(x: Float, y: Float, pressed: Boolean)
+    private external fun nativeInputMouse(x: Float, y: Float, button: Int, pressed: Boolean)
+    private external fun nativeInputKey(keyCode: Int, unicode: Int, pressed: Boolean)
     private external fun nativeInputTrigger(right: Boolean, value: Int)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -68,22 +69,18 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
             surface.isFocusable = true
             surface.isFocusableInTouchMode = true
             surface.setOnTouchListener { _, event ->
-                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-                    surface.requestFocus()
-
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) surface.requestFocus()
+                if (nativeReady && surface.width > 0 && surface.height > 0) {
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> nativeInputTouch(
+                            event.x / surface.width, event.y / surface.height, true
+                        )
+                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> nativeInputTouch(
+                            event.x / surface.width, event.y / surface.height, false
+                        )
+                    }
                 }
-                false
-            }
-            surface.setOnCapturedPointerListener { _, event ->
-                if (nativeReady && event.action == MotionEvent.ACTION_MOVE) {
-                    nativeInputLook(
-                        event.getAxisValue(MotionEvent.AXIS_RELATIVE_X) * 0.012f,
-                        event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y) * 0.012f
-                    )
-                    true
-                } else {
-                    false
-                }
+                true
             }
             setContentView(surface)
             Log.i(TAG, "Activity created; hardware keyboard, mouse and gamepad input enabled (no touch overlay)")
@@ -141,9 +138,13 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
         }
 
         val mask = buttonMask(code)
-        if (mask != null && nativeReady) {
-            nativeInputButton(mask, down)
-            return true
+        if (nativeReady) {
+            nativeInputKey(code, event.unicodeChar, down)
+            if (mask != null || code == KeyEvent.KEYCODE_ESCAPE ||
+                code == KeyEvent.KEYCODE_BACK || event.unicodeChar != 0 ||
+                code == KeyEvent.KEYCODE_ENTER || code == KeyEvent.KEYCODE_TAB) {
+                return true
+            }
         }
         return super.dispatchKeyEvent(event)
     }
@@ -152,13 +153,17 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
     private fun handleMouseButtons(event: MotionEvent): Boolean {
         if (event.actionMasked != MotionEvent.ACTION_BUTTON_PRESS &&
             event.actionMasked != MotionEvent.ACTION_BUTTON_RELEASE) return false
-        if (!nativeReady) return true
+        if (!nativeReady || surface.width <= 0 || surface.height <= 0) return true
         val pressed = event.actionMasked == MotionEvent.ACTION_BUTTON_PRESS
-        when (event.actionButton) {
-            MotionEvent.BUTTON_PRIMARY -> nativeInputButton(0x00400000, pressed)
-            MotionEvent.BUTTON_SECONDARY -> nativeInputButton(0x00800000, pressed)
-            MotionEvent.BUTTON_TERTIARY -> nativeInputButton(0x00000020, pressed)
+        val button = when (event.actionButton) {
+            MotionEvent.BUTTON_PRIMARY -> 0
+            MotionEvent.BUTTON_SECONDARY -> 1
+            MotionEvent.BUTTON_TERTIARY -> 2
+            else -> -1
         }
+        if (button >= 0) nativeInputMouse(
+            event.x / surface.width, event.y / surface.height, button, pressed
+        )
         return true
     }
 
@@ -178,8 +183,26 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
         heldKeys.clear()
     }
 
+    private var lastMouseX = Float.NaN
+    private var lastMouseY = Float.NaN
+
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
         if (handleMouseButtons(event)) return true
+        val source = event.source
+        if ((source and InputDevice.SOURCE_MOUSE) == InputDevice.SOURCE_MOUSE) {
+            if ((event.action == MotionEvent.ACTION_HOVER_MOVE ||
+                 event.action == MotionEvent.ACTION_MOVE) && nativeReady) {
+                if (!lastMouseX.isNaN() && !lastMouseY.isNaN()) {
+                    nativeInputLook(
+                        (event.x - lastMouseX) * 0.012f,
+                        (event.y - lastMouseY) * 0.012f
+                    )
+                }
+                lastMouseX = event.x
+                lastMouseY = event.y
+                return true
+            }
+        }
         val source = event.source
         if ((source and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK ||
             (source and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD) {
@@ -202,14 +225,6 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
             }
         }
         return super.onGenericMotionEvent(event)
-    }
-
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (!hasFocus && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && pointerCaptured) {
-            surface.releasePointerCapture()
-            pointerCaptured = false
-        }
     }
 
     private fun installGameResources() {
