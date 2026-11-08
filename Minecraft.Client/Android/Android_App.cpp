@@ -6,11 +6,16 @@
 #include "Tesselator.h"
 
 #include <android/log.h>
+#include <deque>
+#include <mutex>
 
 namespace {
 bool g_androidGameStarted = false;
 bool g_androidNetworkStarted = false;
 bool g_androidWorldStarting = false;
+struct AndroidTouchEvent { float x; float y; int pressed; };
+std::mutex g_androidTouchMutex;
+std::deque<AndroidTouchEvent> g_androidTouchQueue;
 }
 
 extern "C" bool MclgAndroidGameInitialize()
@@ -67,8 +72,25 @@ extern "C" bool MclgAndroidGameInitialize()
 extern "C" void MclgAndroidGameFrame()
 {
     Minecraft* game = Minecraft::GetInstance();
-    if (g_androidGameStarted && game != NULL && game->running)
-        game->run_middle();
+    if (!g_androidGameStarted || game == NULL || !game->running)
+        return;
+
+    // GLSurfaceView owns all game state. Android UI only enqueues touch events.
+    std::deque<AndroidTouchEvent> pendingTouches;
+    {
+        std::lock_guard<std::mutex> lock(g_androidTouchMutex);
+        pendingTouches.swap(g_androidTouchQueue);
+    }
+    for (const AndroidTouchEvent& event : pendingTouches) {
+        Screen* screen = game->screen;
+        if (screen == NULL || screen->width <= 0 || screen->height <= 0)
+            continue;
+        const int x = static_cast<int>(event.x * screen->width);
+        const int y = screen->height - static_cast<int>(event.y * screen->height) - 1;
+        screen->handleAndroidTouch(x, y, event.pressed != 0);
+    }
+
+    game->run_middle();
 }
 
 extern "C" void MclgAndroidGameResize(int width, int height)
@@ -191,16 +213,8 @@ extern "C" bool MclgAndroidStartWorld(const wchar_t* worldName, __int64 seed)
 
 extern "C" void MclgAndroidInputTouch(float x, float y, int pressed)
 {
-    Minecraft* game = Minecraft::GetInstance();
-    if (!g_androidGameStarted || game == NULL || game->screen == NULL ||
-        game->width <= 0 || game->height <= 0)
+    if (!g_androidGameStarted)
         return;
-
-    Screen* screen = game->screen;
-    const int screenX = static_cast<int>(x * screen->width);
-    const int screenY = screen->height - static_cast<int>(y * screen->height) - 1;
-    if (pressed)
-        screen->handleAndroidTouch(screenX, screenY, true);
-    else
-        screen->handleAndroidTouch(screenX, screenY, false);
+    std::lock_guard<std::mutex> lock(g_androidTouchMutex);
+    g_androidTouchQueue.push_back(AndroidTouchEvent{x, y, pressed});
 }
