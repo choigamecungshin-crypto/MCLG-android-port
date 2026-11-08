@@ -56,17 +56,22 @@ jobs:
               ] | sort_by(.created_at) | last | .id // empty
             ')"
 
-            if [ -z "$artifact_id" ]; then
-              echo "::error::No saved signing key exists. Restore MCLG_KEYSTORE_BASE64 before building."
-              exit 1
+            if [ -n "$artifact_id" ]; then
+              curl --fail --location --silent --show-error \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" \
+                -o signing-key.zip
+              unzip -p signing-key.zip mclg-release.jks > mclg-release.jks
+              echo "Restored signing key from the latest saved artifact."
+            else
+              echo "No saved signing key exists yet; creating the permanent first-build key."
+              keytool -genkeypair -noprompt -v \
+                -keystore mclg-release.jks -storetype JKS \
+                -storepass "$MCLG_STORE_PASSWORD" -keypass "$MCLG_STORE_PASSWORD" \
+                -alias mclg -keyalg RSA -keysize 2048 -validity 10000 \
+                -dname "CN=Minecraft Legacy Android, OU=Android, O=MCLG, L=Local, ST=Local, C=VN"
             fi
-
-            curl --fail --location --silent --show-error \
-              -H "Authorization: Bearer $GH_TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" \
-              -o signing-key.zip
-            unzip -p signing-key.zip mclg-release.jks > mclg-release.jks
           fi
 
           test -s mclg-release.jks
