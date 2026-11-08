@@ -203,7 +203,6 @@ class MainActivity : Activity(), GLSurfaceView.Renderer {
                 return true
             }
         }
-        val source = event.source
         if ((source and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK ||
             (source and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD) {
             if (event.action == MotionEvent.ACTION_MOVE && nativeReady) {
