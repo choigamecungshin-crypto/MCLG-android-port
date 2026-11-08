@@ -12,6 +12,8 @@
 #include <ctime>
 #include <chrono>
 #include <thread>
+#include <atomic>
+#include <unordered_map>
 #include <pthread.h>
 
 #ifndef TRUE
@@ -162,5 +164,27 @@ static inline void LeaveCriticalSection(CRITICAL_SECTION* section) {
 }
 static inline BOOL TryEnterCriticalSection(CRITICAL_SECTION* section) {
     return pthread_mutex_trylock(section) == 0 ? TRUE : FALSE;
+}
+
+static inline std::unordered_map<DWORD, LPVOID>& AndroidTlsValues() {
+    static thread_local std::unordered_map<DWORD, LPVOID> values;
+    return values;
+}
+static inline DWORD TlsAlloc() {
+    static std::atomic<DWORD> nextIndex{1};
+    return nextIndex.fetch_add(1, std::memory_order_relaxed);
+}
+static inline BOOL TlsSetValue(DWORD index, LPVOID value) {
+    AndroidTlsValues()[index] = value;
+    return TRUE;
+}
+static inline LPVOID TlsGetValue(DWORD index) {
+    auto& values = AndroidTlsValues();
+    const auto found = values.find(index);
+    return found == values.end() ? nullptr : found->second;
+}
+static inline BOOL TlsFree(DWORD index) {
+    AndroidTlsValues().erase(index);
+    return TRUE;
 }
 #endif
