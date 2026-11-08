@@ -51,5 +51,7 @@ public:
     virtual void confirmResult(bool result, int id);
     virtual void tabPressed();
     void handleAndroidTouch(int x, int y, bool pressed);
+    void handleAndroidMouse(int x, int y, int button, bool pressed);
+    void handleAndroidKey(int androidKeyCode, int unicode, bool pressed);
 };
 
