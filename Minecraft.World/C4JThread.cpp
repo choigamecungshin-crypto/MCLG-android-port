@@ -11,9 +11,10 @@ extern "C" {
 extern void user_registerthread();
 extern void user_removethread();
 }
+#elif defined(__ANDROID__)
+// Android uses pthreads and POSIX condition variables; no console shutdown manager.
 #else
 #include "..\Minecraft.Client\PS3\PS3Extras\ShutdownManager.h"
-
 #endif
 
 std::vector<C4JThread*> C4JThread::ms_threadList;
@@ -56,6 +57,8 @@ C4JThread::C4JThread( C4JThreadStartFunc* startFunc, void* param, const char* th
 
 #ifdef __PS3__
 	sprintf(m_threadName, "(4J) %s", threadName );
+#elif defined(__ANDROID__)
+	snprintf(m_threadName, sizeof(m_threadName), "(4J) %s", threadName);
 #else
 	sprintf_s(m_threadName,64, "(4J) %s", threadName );
 #endif
@@ -63,7 +66,12 @@ C4JThread::C4JThread( C4JThreadStartFunc* startFunc, void* param, const char* th
 	m_isRunning = false;
 	m_hasStarted = false;
 
-	m_exitCode = STILL_ACTIVE;
+	m_exitCode =
+#if defined(__ANDROID__)
+		259;
+#else
+		STILL_ACTIVE;
+#endif
 
 #ifdef __PS3__
 	m_completionFlag = new Event(Event::e_modeManualClear);
@@ -111,6 +119,11 @@ C4JThread::C4JThread( C4JThreadStartFunc* startFunc, void* param, const char* th
 
 	m_threadID = sceKernelCreateThread(m_threadName, entryPoint, g_DefaultPriority, m_stackSize, 0, CPU, NULL);
 	app.DebugPrintf("***************************** start thread %s **************************\n", m_threadName);
+#elif defined(__ANDROID__)
+	m_threadID = pthread_t{};
+	m_threadCreated = false;
+	m_completionFlag = new Event(Event::e_modeManualClear);
+	m_lastSleepTime = 0;
 #else
 	m_threadID = 0;
 	m_threadHandle = 0;
@@ -134,6 +147,8 @@ C4JThread::C4JThread( const char* mainThreadName)
 
 #ifdef __PS3__
 	sprintf(m_threadName, "(4J) %s", mainThreadName);
+#elif defined(__ANDROID__)
+	snprintf(m_threadName, sizeof(m_threadName), "(4J) %s", mainThreadName);
 #else
 	sprintf_s(m_threadName, 64, "(4J) %s", mainThreadName);
 #endif
@@ -159,6 +174,10 @@ C4JThread::C4JThread( const char* mainThreadName)
 	int err = sceKernelChangeThreadCpuAffinityMask(m_threadID, SCE_KERNEL_CPU_MASK_USER_0);
 //	sceKernelChangeThreadPriority(m_threadID, g_DefaultPriority + 1);
 	g_DefaultCPU = SCE_KERNEL_CPU_MASK_USER_ALL;//sceKernelGetThreadCpuAffinityMask(m_threadID);
+#elif defined(__ANDROID__)
+	m_threadID = pthread_self();
+	m_threadCreated = false;
+	m_completionFlag = new Event(Event::e_modeManualClear);
 #else
 	m_threadID = GetCurrentThreadId();
 	m_threadHandle = GetCurrentThread();
@@ -237,6 +256,18 @@ SceInt32 C4JThread::entryPoint(SceSize argSize, void *pArgBlock)
 
 	return pThread->m_exitCode;
 }
+#elif defined(__ANDROID__)
+void* C4JThread::entryPoint(void* lpParam)
+{
+	C4JThread* pThread = static_cast<C4JThread*>(lpParam);
+	char threadName[16] = {};
+	std::snprintf(threadName, sizeof(threadName), "%s", pThread->m_threadName);
+	pthread_setname_np(pthread_self(), threadName);
+	pThread->m_exitCode = (*pThread->m_startFunc)(pThread->m_threadParam);
+	pThread->m_isRunning = false;
+	pThread->m_completionFlag->Set();
+	return nullptr;
+}
 #else
 DWORD WINAPI	C4JThread::entryPoint(LPVOID lpParam)
 {
@@ -272,6 +303,17 @@ void C4JThread::Run()
 	StrArg strArg = {this};
 //	m_threadID = sceKernelCreateThread(m_threadName, entryPoint, m_priority, m_stackSize, 0, m_CPUMask, NULL);
 	sceKernelStartThread( m_threadID, sizeof(strArg), &strArg);
+#elif defined(__ANDROID__)
+	pthread_attr_t attributes;
+	pthread_attr_init(&attributes);
+	if (m_stackSize >= PTHREAD_STACK_MIN) pthread_attr_setstacksize(&attributes, static_cast<size_t>(m_stackSize));
+	int createResult = pthread_create(&m_threadID, &attributes, entryPoint, this);
+	pthread_attr_destroy(&attributes);
+	m_threadCreated = createResult == 0;
+	if (createResult != 0) {
+		m_exitCode = createResult;
+		m_completionFlag->Set();
+	}
 #else
 	ResumeThread(m_threadHandle);
 #endif
@@ -286,6 +328,8 @@ void C4JThread::SetProcessor( int proc )
 	// does nothing since we only have the 1 processor
 #elif defined __ORBIS__
 	scePthreadAttrSetaffinity(&m_threadAttr, 1 << proc);
+#elif defined(__ANDROID__)
+	(void)proc;
 #elif defined __PSVITA__
 	int Proc = proc >> 1;			// convert from 360's 3 cores * 2 hardware threads to Vita's 3 cores
 	int Mask = SCE_KERNEL_CPU_MASK_USER_0 << Proc;
@@ -295,6 +339,8 @@ void C4JThread::SetProcessor( int proc )
 	app.DebugPrintf("***************************** set thread proc %s %d %d %d **************************\n", m_threadName, proc, Mask, Newmask);
 #elif defined _DURANGO
 	SetThreadAffinityMask(m_threadHandle, 1 << proc );
+#elif defined(__ANDROID__)
+	(void)proc;
 #else
 	XSetThreadProcessor( m_threadHandle, proc);
 #endif
@@ -352,6 +398,8 @@ void C4JThread::SetPriority( int priority )
 
 //	sceKernelChangeThreadPriority(m_threadID, m_priority);
 	app.DebugPrintf("***************************** set thread prio %s %d %d **************************\n", m_threadName, priority, m_priority);
+#elif defined(__ANDROID__)
+	(void)priority;
 #else
 	SetThreadPriority(m_threadHandle, priority);
 #endif // __PS3__
@@ -394,7 +442,7 @@ DWORD C4JThread::WaitForCompletion( int timeoutMs )
 
 int C4JThread::GetExitCode()
 {
-#if defined  __PS3__ || defined __ORBIS__ || defined __PSVITA__
+#if defined  __PS3__ || defined __ORBIS__ || defined __PSVITA__ || defined(__ANDROID__)
 	return m_exitCode;
 #else
 	DWORD exitcode = 0;
@@ -420,6 +468,9 @@ void C4JThread::Sleep( int millisecs )
 #elif defined __PSVITA__
 	// 4J Stu - 0 is an error, so add a tiny sleep when we just want to yield
 	sceKernelDelayThread(millisecs * 1000 + 1);
+#elif defined(__ANDROID__)
+	if (millisecs <= 0) std::this_thread::yield();
+	else std::this_thread::sleep_for(std::chrono::milliseconds(millisecs));
 #else
 	::Sleep(millisecs);
 #endif // __PS3__
@@ -434,6 +485,8 @@ C4JThread* C4JThread::getCurrentThread()
 	ScePthread currThreadID = scePthreadSelf();
 #elif defined __PSVITA__
 	SceUID currThreadID = sceKernelGetThreadId();
+#elif defined(__ANDROID__)
+	pthread_t currThreadID = pthread_self();
 #else
 	DWORD currThreadID = GetCurrentThreadId();
 #endif //__PS3__
@@ -441,7 +494,12 @@ C4JThread* C4JThread::getCurrentThread()
 
 	for(int i=0;i<ms_threadList.size(); i++)
 	{
-		if(currThreadID == ms_threadList[i]->m_threadID)
+#if defined(__ANDROID__)
+		bool matches = pthread_equal(currThreadID, ms_threadList[i]->m_threadID) != 0;
+#else
+		bool matches = currThreadID == ms_threadList[i]->m_threadID;
+#endif
+		if(matches)
 		{
 			LeaveCriticalSection(&ms_threadListCS);
 			return ms_threadList[i];
