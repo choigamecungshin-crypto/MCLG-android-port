@@ -61,7 +61,7 @@ void SoundEngine::SetStreamingSounds(int, int, int, int, int, int, int) {}
 void SoundEngine::updateMiles() {}
 void SoundEngine::playMusicUpdate() {}
 #ifdef _DEBUG
-void SoundEngine::GetSoundName(char* name, int) { if (name) name[0] = '\\0'; }
+void SoundEngine::GetSoundName(char* name, int) { if (name) name[0] = 0; }
 #endif
 
 #else
