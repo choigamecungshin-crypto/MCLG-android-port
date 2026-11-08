@@ -84,6 +84,50 @@ void Screen::handleAndroidTouch(int x, int y, bool pressed)
         mouseReleased(x, y, 0);
 }
 
+void Screen::handleAndroidMouse(int x, int y, int button, bool pressed)
+{
+    if (pressed)
+        mouseClicked(x, y, button);
+    else
+        mouseReleased(x, y, button);
+}
+
+void Screen::handleAndroidKey(int androidKeyCode, int unicode, bool pressed)
+{
+    if (!pressed) return;
+
+    int legacyKey = 0;
+    switch (androidKeyCode)
+    {
+        case 4:   // Android back
+        case 111: // Escape
+            legacyKey = Keyboard::KEY_ESCAPE;
+            break;
+        case 66:  // Enter
+            legacyKey = Keyboard::KEY_RETURN;
+            break;
+        case 61:  // Tab
+            tabPressed();
+            return;
+        case 67:  // Backspace
+            legacyKey = Keyboard::KEY_BACK;
+            break;
+        case 19: legacyKey = Keyboard::KEY_UP; break;
+        case 20: legacyKey = Keyboard::KEY_DOWN; break;
+        case 21: legacyKey = Keyboard::KEY_LEFT; break;
+        case 22: legacyKey = Keyboard::KEY_RIGHT; break;
+        case 59: legacyKey = Keyboard::KEY_LSHIFT; break;
+        case 60: legacyKey = Keyboard::KEY_RSHIFT; break;
+        case 113: legacyKey = Keyboard::KEY_LCONTROL; break;
+        case 114: legacyKey = Keyboard::KEY_RCONTROL; break;
+        default: break;
+    }
+
+    wchar_t character = (unicode > 0 && unicode <= 0xffff) ?
+        static_cast<wchar_t>(unicode) : 0;
+    keyPressed(character, legacyKey);
+}
+
 void Screen::buttonClicked(Button *button)
 {
 }
