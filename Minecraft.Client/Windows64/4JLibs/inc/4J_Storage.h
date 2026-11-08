@@ -337,6 +337,18 @@ public:
 // #ifdef _DEBUG
 // 	void SetSaveName(int i);					
 // #endif
+#if defined(__ANDROID__)
+	// Android persistent backing for the Legacy split-save container.
+	int AddSubfile(unsigned int regionIndex);
+	unsigned int GetSubfileCount();
+	void GetSubfileDetails(unsigned int index, unsigned int* regionIndex,
+		unsigned char** data, unsigned int* dataSize);
+	void ResetSubfiles();
+	void UpdateSubfile(int index, unsigned char* data, unsigned int dataSize);
+	C4JStorage::ESaveGameState GetSaveState();
+	C4JStorage::ESaveGameState SaveSubfiles(int (*Func)(LPVOID, const bool), LPVOID lpParam);
+#endif
+
 	// string table for all the Storage problems. Loaded by the application
 	C4JStringTable				*m_pStringTable;
 };
