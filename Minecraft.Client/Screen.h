@@ -50,5 +50,6 @@ public:
     virtual bool isPauseScreen();
     virtual void confirmResult(bool result, int id);
     virtual void tabPressed();
+    void handleAndroidTouch(int x, int y, bool pressed);
 };
 
