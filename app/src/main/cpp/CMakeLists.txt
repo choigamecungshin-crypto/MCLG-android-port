@@ -64,6 +64,7 @@ set(MCLG_ENGINE_SOURCES
     "${MCLG_CLIENT_DIR}/Android/Android_App.cpp"
     "${MCLG_CLIENT_DIR}/Android/Android_Render.cpp"
     "${MCLG_CLIENT_DIR}/Android/Android_Input.cpp"
+    "${MCLG_CLIENT_DIR}/Android/Android_QNet.cpp"
 )
 foreach(source IN LISTS MCLG_WORLD_SOURCES MCLG_CLIENT_ROOT_SOURCES MCLG_COMMON_SOURCES)
     set(excluded FALSE)
