@@ -350,8 +350,10 @@ void C4JThread::Run()
 	ResumeThread(m_threadHandle);
 #endif
 	m_lastSleepTime = System::currentTimeMillis();
+#if !defined(__ANDROID__)
 	m_isRunning = true;
 	m_hasStarted = true;
+#endif
 }
 
 void C4JThread::SetProcessor( int proc )
@@ -367,6 +369,8 @@ void C4JThread::SetProcessor( int proc )
 //	int err = sceKernelChangeThreadCpuAffinityMask(m_threadID, Mask);
 	int Newmask = sceKernelGetThreadCpuAffinityMask(m_threadID);
 	app.DebugPrintf("***************************** set thread proc %s %d %d %d **************************\n", m_threadName, proc, Mask, Newmask);
+#elif defined(__ANDROID__)
+	(void)proc;
 #elif defined _DURANGO
 	SetThreadAffinityMask(m_threadHandle, 1 << proc );
 #else
